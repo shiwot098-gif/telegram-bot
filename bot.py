@@ -73,7 +73,95 @@ def generate_unique_tickets(count):
         return [random.randint(1, 3000) for _ in range(count)]
 
 # =======================
-# HANDLERS
+# ADMIN COMMANDS
+# =======================
+
+# 📊 አዲስ፦ ስንት ዕጣ እንደተሸጠ እና እንደቀረ ማሳያ (ለአድሚን ብቻ)
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        return  # አድሚን ካልሆነ ምንም አይመልስም
+        
+    cursor.execute("SELECT ticket_number FROM transactions WHERE ticket_number IS NOT NULL")
+    all_rows = cursor.fetchall()
+    
+    total_sold = 0
+    for row in all_rows:
+        if row[0]:
+            total_sold += len(row[0].split(","))
+            
+    total_remaining = 3000 - total_sold
+    
+    status_msg = (
+        f"📊 **የዕጣ ሽያጭ አጠቃላይ መረጃ፦**\n\n"
+        f"🎟 **እስካሁን የተሸጡ ዕጣዎች፦** `{total_sold}`\n"
+        f"⏳ **የቀሩ (ያልተሸጡ) ዕጣዎች፦** `{total_remaining}`\n"
+        f"📈 **ጠቅላላ የዕጣ መጠን፦** `3000`"
+    )
+    await update.message.reply_text(status_msg, parse_mode="Markdown")
+
+# 🔍 አዲስ፦ በትኬት ቁጥር መፈለጊያ ትዕዛዝ (ለአድሚን ብቻ)
+async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        return  # አድሚን ካልሆነ ምንም አይመልስም
+        
+    if not context.args:
+        await update.message.reply_text("⚠️ እባክዎ የሚፈልጉትን የዕጣ ቁጥር አብረው ያስገቡ። ለምሳሌ፦ `/search 154`")
+        return
+        
+    search_num = context.args[0].strip()
+    
+    cursor.execute("SELECT user_name, user_phone, ticket_number, created_at, transaction_id FROM transactions")
+    rows = cursor.fetchall()
+    
+    found = False
+    for row in rows:
+        tickets = [t.strip() for t in row[2].split(",")]
+        if search_num in tickets:
+            found = True
+            await update.message.reply_text(
+                f"🔍 **የዕጣ ቁጥር መረጃ ተገኝቷል፦**\n\n"
+                f"🎫 **የዕጣ ቁጥር፦** `【 {search_num} 】`\n"
+                f"👤 **ባለቤት (ስም)፦** `{row[0]}`\n"
+                f"📞 **ስልክ ቁጥር፦** `{row[1]}`\n"
+                f"🔢 አብረው የተሰጡ ዕጣዎች፦ `{row[2]}`\n"
+                f"📅 **የተፈቀደበት ቀን፦** {row[3]}\n"
+                f"🔹 **Ref ID፦** `{row[4]}`",
+                parse_mode="Markdown"
+            )
+            break
+            
+    if not found:
+        await update.message.reply_text(f"❌ የዕጣ ቁጥር `{search_num}` ዳታቤዝ ውስጥ አልተገኘም።")
+
+# 👤 አዲስ፦ በስልክ ቁጥር መፈለጊያ ትዕዛዝ (ለአድሚን ብቻ)
+async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        return
+        
+    if not context.args:
+        await update.message.reply_text("⚠️ እባክዎ የሚፈልጉትን ስልክ ቁጥር አብረው ያስገቡ። ለምሳሌ፦ `/user 0901268686`")
+        return
+        
+    search_phone = context.args[0].strip()
+    
+    cursor.execute("SELECT user_name, ticket_number, created_at FROM transactions WHERE user_phone = ?", (search_phone,))
+    rows = cursor.fetchall()
+    
+    if rows:
+        msg = f"👤 **ለስልክ ቁጥር `{search_phone}` የተገኙ መረጃዎች፦**\n\n"
+        msg += f"👤 **የደንበኛ ስም፦** `{rows[0][0]}`\n\n"
+        msg += "📋 **የተሰጡ ዕጣዎች ዝርዝር፦**\n"
+        for i, row in enumerate(rows, 1):
+            msg += f"{i}. 🎟 ቁጥሮች፦ `{row[1]}` (📅 {row[2]})\n"
+        await update.message.reply_text(msg, parse_mode="Markdown")
+    else:
+        await update.message.reply_text(f"❌ በስልክ ቁጥር `{search_phone}` የተመዘገበ ምንም ደንበኛ አልተገኘም።")
+
+# =======================
+# USER HANDLERS
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
@@ -181,7 +269,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u_name = state.get('name')
         u_phone = state.get('phone')
         
-        # 🔟 እዚህ ጋር የአዝራሮቹ ዝርዝር እስከ 10 ዕጣ እንዲሆን ተስተካክሏል
         keyboard = [
             [
                 InlineKeyboardButton("🎟 1", callback_data=f"app_1_{tx_id}_{user_id}"),
@@ -299,11 +386,17 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    
+    # ለአድሚን ብቻ የሚሠሩ ትዕዛዞች
+    app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("search", search_ticket))
+    app.add_handler(CommandHandler("user", search_user))
+    
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_buttons))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(admin_callback))
     
-    print("ቦቱ በአዝራሮች ሜኑ እና በአስተዳዳሪ ፈቃድ ሥርዓት ሥራ ጀምሯል...")
+    print("ቦቱ ሙሉ በሙሉ ተዘምኖ ሥራ ጀምሯል...")
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
