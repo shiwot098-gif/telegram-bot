@@ -2,7 +2,7 @@ import os
 import sqlite3
 import logging
 import asyncio
-import re  # መረጃዎችን ለመፈልፈል የተጨመረ
+import re
 from datetime import datetime
 
 from telegram import Update
@@ -10,6 +10,8 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, Con
 
 import cv2
 import numpy as np
+import requests
+from bs4 import BeautifulSoup
 
 # =======================
 # CONFIG
@@ -36,15 +38,14 @@ CREATE TABLE IF NOT EXISTS transactions (
 conn.commit()
 
 # =======================
-# HELPERS (ዳታቤዝ መፈተኛ)
+# HELPERS (የባንክ ሊንክ መተንተኛ)
 # =======================
 def check_and_save_qr(qr_text):
     try:
         cursor.execute("SELECT qr_data FROM transactions WHERE qr_data = ?", (qr_text,))
         result = cursor.fetchone()
-        
         if result:
-            return False  # የቆየ ነው
+            return False
         else:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute(
@@ -52,38 +53,61 @@ def check_and_save_qr(qr_text):
                 (qr_text[:20], qr_text, "COMPLETED", current_time)
             )
             conn.commit()
-            return True  # አዲስ ነው
+            return True
     except Exception as e:
         logging.error(f"Database error: {e}")
         return False
 
-def extract_qr_details(qr_text):
+def scrape_cbe_details(url):
     """
-    በQR ኮድ ውስጥ ያለውን ጽሑፍ በመመርመር የገንዘብ መጠን፣ ስም እና ID ለመለየት ይሞክራል
+    የንግድ ባንክን የሪሲት ሊንክ በመክፈት የብር መጠን፣ የላኪና ተቀባይ ስም ይፈልጋል
     """
     amount = "ያልታወቀ"
+    sender = "ያልታወቀ"
+    receiver = "ያልታወቀ"
     tx_id = "ያልታወቀ"
     
-    # በQR ውስጥ የገንዘብ መጠን (Amount) መኖር አለመኖሩን መፈለጊያ (ምሳሌ፡ am=100 ወይም amount=100)
-    amt_match = re.search(r'(?:amt|amount|am)=([\d.]+)', qr_text, re.IGNORECASE)
-    if amt_match:
-        amount = f"{amt_match.group(1)} ETB"
+    try:
+        # ሊንኩን መክፈት
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
         
-    # የግብይት ቁጥር (Transaction ID) መፈለጊያ
-    id_match = re.search(r'(?:tx|txn|id|ref)=([A-Z0-9]+)', qr_text, re.IGNORECASE)
-    if id_match:
-        tx_id = id_match.group(1)
-
-    return amount, tx_id
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            page_text = soup.get_text()
+            
+            # በድረገጹ ላይ የገንዘብ መጠን መፈለጊያ (ምሳሌ፡ 2501.20 ETB)
+            amt_match = re.search(r'([\d,]+\.\d{2})\s*(?:ETB|ብር)', page_text)
+            if amt_match:
+                amount = f"{amt_match.group(1)} ETB"
+                
+            # የግብይት ቁጥር መፈለጊያ (ምሳሌ፡ FT26173N55M2)
+            id_match = re.search(r'(FT[A-Z0-9]{10,})', page_text)
+            if id_match:
+                tx_id = id_match.group(1)
+                
+            # ላኪና ተቀባይን ለመለየት መሞከሪያ (ይህ እንደ ባንኩ ድረገጽ አወቃቀር ይወሰናል)
+            # ለጊዜው ከጽሑፉ ውስጥ ስሞችን ለመፈለግ እንዲረዳ
+            lines = [line.strip() for line in page_text.split('\n') if line.strip()]
+            for line in lines:
+                if "From" in line or "Sender" in line:
+                    sender = line
+                if "To" in line or "Receiver" in line:
+                    receiver = line
+                    
+    except Exception as e:
+        logging.error(f"Scraping error: {e}")
+        
+    return amount, tx_id, sender, receiver
 
 # =======================
-# HANDLERS (የቦቱ ዋና ተግባራት)
+# HANDLERS
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ሰላም! እንኳን ወደ ቦቱ በሰላም መጡ። እባክዎ የግብይት ማረጋገጫ የQR ኮድ ፎቶ ይላኩ።")
+    await update.message.reply_text("ሰላም! እባክዎ የግብይት ማረጋገጫ የQR ኮድ ፎቶ ይላኩ።")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ፎቶዎን ተቀብያለሁ! መረጃውን እያነበብኩ ነው...")
+    await update.message.reply_text("ፎቶዎን ተቀብያለሁ! መረጃውን ከባንክ ሰርቨር ላይ በማንበብ ላይ ነኝ፣ እባክዎ ጥቂት ሰከንዶችን ይጠብቁ...")
     
     photo_file = await update.message.photo[-1].get_file()
     photo_path = "user_screenshot.jpg"
@@ -95,28 +119,27 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         qr_data, bbox, straight_qrcode = detector.detectAndDecode(img)
         
         if qr_data:
-            # በQR ውስጥ ያለውን ዝርዝር መረጃ መፈልፈል
-            amount, tx_id = extract_qr_details(qr_data)
+            # መረጃውን ከሊንኩ ላይ መፈልፈል
+            amount, tx_id, sender, receiver = scrape_cbe_details(qr_data)
             
-            # አዲስ ወይም አሮጌ መሆኑን መፈተሽ
+            # ድጋሚ መሆኑን መፈተሽ
             is_new = check_and_save_qr(qr_data)
-            
             status_msg = "✅ **አዲስ የግብይት ማረጋገጫ!**" if is_new else "❌ **ማስጠንቀቂያ፦ ድጋሚ የተላከ (የቆየ) መረጃ!**"
             
-            # ለተጠቃሚው ዝርዝሩን መናገር
+            # ምላሽ ማዘጋጀት
             detailed_response = (
                 f"{status_msg}\n\n"
-                f"📊 **ከQR ኮዱ የተገኘ ዝርዝር መረጃ፦**\n"
+                f"📊 **ከባንክ ማረጋገጫው የተገኘ ዝርዝር፦**\n"
                 f"🔹 **የገንዘብ መጠን፦** {amount}\n"
-                f"🔹 **የግብይት ቁጥር (ID)፦** {tx_id}\n\n"
-                f"📝 **ሙሉ የQR ሊንክ/ጽሑፍ፦**\n`{qr_data}`"
+                f"🔹 **የግብይት ቁጥር (ID)፦** {tx_id}\n"
+                f"🔹 **ላኪ፦** {sender}\n"
+                f"🔹 **ተቀባይ፦** {receiver}\n\n"
+                f"📝 **የQR ሊንክ፦** [ሊንኩን ለመክፈት ይጫኑ]({qr_data})"
             )
             
-            await update.message.reply_text(detailed_response, parse_mode="Markdown")
+            await update.message.reply_text(detailed_response, parse_mode="Markdown", disable_web_page_preview=True)
         else:
-            await update.message.reply_text(
-                "⚠️ በፎቶው ላይ ምንም ዓይነት የQR ኮድ ማግኘት አልቻልኩም። እባክዎ የQR ኮዱ በግልጽ የሚታይበት ፎቶ ድጋሚ ይላኩ።"
-            )
+            await update.message.reply_text("⚠️ በፎቶው ላይ ምንም ዓይነት የQR ኮድ ማግኘት አልቻልኩም።")
             
     except Exception as e:
         logging.error(f"Error: {e}")
@@ -134,7 +157,7 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     
-    print("ቦቱ በዝርዝር መረጃ መተንተኛው ሥራ ጀምሯል...")
+    print("ቦቱ በድረገጽ መተንተኛው ሥራ ጀምሯል...")
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
