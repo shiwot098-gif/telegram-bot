@@ -14,7 +14,7 @@ from pyzbar.pyzbar import decode
 # =======================
 # CONFIG
 # =======================
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("8611743019:AAGEHD_MZTciUYBVatUTcJC5uCw-OM5Ij3U")
 
 logging.basicConfig(level=logging.INFO)
 
