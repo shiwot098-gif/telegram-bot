@@ -260,7 +260,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"❌ መጠንቀቅታ ፦ እዚ ደረሰኝ ቀዲሙ ተመዝጊቡ ኔሩ እዩ!**\n\n"
                 f"👉 ዝነበረ ዕፃ ቁፅሪ፦ {tickets_formatted} እዩ።"
-        
+    )
             context.user_data.pop(user_id, None)
             return
 
