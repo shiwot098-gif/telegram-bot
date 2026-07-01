@@ -20,7 +20,7 @@ from telegram.ext import (
 # CONFIG
 # =======================
 TOKEN = os.getenv("BOT_TOKEN", "8611743019:AAGEHD_MZTciUYBVatUTcJC5uCw-OM5Ij3U")
-ADMIN_ID = 5942828479  # ያቀረቡት የእርስዎ ID
+ADMIN_ID = 5942828479  # የእርስዎ ID
 
 logging.basicConfig(level=logging.INFO)
 
@@ -76,7 +76,6 @@ def generate_unique_tickets(count):
 # HANDLERS
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # የታችኛው ሜኑ አዝራሮች (Keyboard Buttons)
     reply_keyboard = [
         ['🏦 የተቀባይ አካውንት', '📸 ሪሲት ለመላክ'],
         ['🎁 ሽልማቶች', '📞 በስልክ ለማግኘት']
@@ -93,14 +92,17 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.message.from_user.id
     
     if text == '🏦 የተቀባይ አካውንት':
+        context.user_data.pop(user_id, None)
         await update.message.reply_text(
             "🏦 **የኢትዮጵያ ንግድ ባንክ (CBE)**\n\n"
             "🔹 **የአካውንት ቁጥር፦** `1000 77 0064 779`\n"
             "👤 **የአካውንት ስም፦** Tamrat Amare / Amanuel Hiwet\n\n"
             "⚠️ *ማሳሰቢያ፦ እባክዎ በትክክለኛው አካውንት ላይ ማስገባትዎን ያረጋግጡ።*"
         )
+        return
         
     elif text == '🎁 ሽልማቶች':
+        context.user_data.pop(user_id, None)
         await update.message.reply_text(
             "🎁 **የዕጣ ሽልማቶች ዝርዝር፦**\n\n"
             "🥇 **1ኛ ዕጣ፦** BYD Seagull መኪና\n"
@@ -108,22 +110,25 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             "🥉 **3ኛ ዕጣ፦** BYD Seagull መኪና\n\n"
             "🎉 *መልካም ዕድል! ለየእያንዳንዱ ግብይትዎ ዕጣዎችን ያግኙ።*"
         )
+        return
         
     elif text == '📞 በስልክ ለማግኘት':
+        context.user_data.pop(user_id, None)
         await update.message.reply_text(
             "📞 **በስልክ ለማግኘት፦**\n\n"
             "📱 `09 01 2686 86`\n\n"
             "💬 ማንኛውም ጥያቄ ካለዎት መደወል ይችላሉ።"
         )
+        return
         
     elif text == '📸 ሪሲት ለመላክ':
         context.user_data[user_id] = {'step': 'get_name'}
         await update.message.reply_text("👤 **ሪሲት ለመላክ መጀመሪያ ሙሉ ስምዎን ያስገቡ፦**")
-        
-    else:
-        # የባለብዙ ደረጃ (Form) አሞላል ሂደት
-        state = context.user_data.get(user_id)
-        if state and state.get('step') == 'get_name':
+        return
+
+    state = context.user_data.get(user_id)
+    if state:
+        if state.get('step') == 'get_name':
             context.user_data[user_id]['name'] = text
             context.user_data[user_id]['step'] = 'get_phone'
             await update.message.reply_text("📞 **በመቀጠል ስልክ ቁጥርዎን ያስገቡ፦**")
@@ -131,13 +136,12 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         elif state and state.get('step') == 'get_phone':
             context.user_data[user_id]['phone'] = text
             context.user_data[user_id]['step'] = 'get_photo'
-            await update.message.reply_text("📸 **በጣም ጥሩ! አሁን የባንክ ሪሲቱን ፎቶ (Screenshot) ይላኩ፦**")
+            await update.message.reply_text("📸 **በአሪፉ ተመዝግቧል! አሁን የባንክ ሪሲቱን ፎቶ (Screenshot) ይላኩ፦**")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     state = context.user_data.get(user_id)
     
-    # መጀመሪያ ስምና ስልክ ማስገባታቸውን ማረጋገጥ
     if not state or state.get('step') != 'get_photo':
         await update.message.reply_text("⚠️ እባክዎ መጀመሪያ ሜኑ ላይ ያለውን **'📸 ሪሲት ለመላክ'** የሚለውን ቁልፍ ተጭነው ስምና ስልክዎን ያስገቡ።")
         return
@@ -149,7 +153,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file_info.download_to_drive(photo_path)
     
     try:
-        # 1. የQR ኮዱን ማንበብ
         img = cv2.imread(photo_path)
         detector = cv2.QRCodeDetector()
         qr_data, _, _ = detector.detectAndDecode(img)
@@ -161,41 +164,45 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url_match = re.search(r'v2-([A-Za-z0-9]+)', qr_data)
         tx_id = url_match.group(1) if url_match else qr_data[-15:]
         
-        # 2. የተደገመ መሆኑን ማረጋገጥ
         cursor.execute("SELECT ticket_number FROM transactions WHERE transaction_id = ?", (tx_id,))
         result = cursor.fetchone()
         
         if result:
-            # 🔄 የተደገመ ከሆነ ለላኪው የነበረውን ዕጣ መናገር
             tickets_formatted = " , ".join([f"`【 {t.strip()} 】`" for t in result[0].split(",")])
             await update.message.reply_text(
                 f"❌ **ማስጠንቀቂያ፦ ይህ ሪሲት ከዚህ በፊት ተመዝግቧል!**\n\n"
                 f"🏆 የነበረዎት የዕጣ ቁጥር፦ {tickets_formatted} ነበር።"
             )
-            # ሁኔታውን ማጽዳት
             context.user_data.pop(user_id, None)
             return
 
-        # 3. አዲስ ከሆነ መረጃውን ወደ እርስዎ (Admin) መላክ
         await update.message.reply_text("⚡ ሪሲትዎ እና መረጃዎ ደርሶኛል! በባለቤቱ እየተረጋገጠ ስለሆነ ጥቂት ደቂቃዎችን ይጠብቁ...")
         
         u_name = state.get('name')
         u_phone = state.get('phone')
         
-        # የአስተዳዳሪ ውሳኔ ቁልፎች
+        # 🔟 እዚህ ጋር የአዝራሮቹ ዝርዝር እስከ 10 ዕጣ እንዲሆን ተስተካክሏል
         keyboard = [
             [
-                InlineKeyboardButton("🎟 1 ዕጣ ስጥ", callback_data=f"app_1_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 2 ዕጣ ስጥ", callback_data=f"app_2_{tx_id}_{user_id}")
+                InlineKeyboardButton("🎟 1", callback_data=f"app_1_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 2", callback_data=f"app_2_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 3", callback_data=f"app_3_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 4", callback_data=f"app_4_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 5", callback_data=f"app_5_{tx_id}_{user_id}")
             ],
             [
-                InlineKeyboardButton("🎟 3 ዕጣ ስጥ", callback_data=f"app_3_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 6", callback_data=f"app_6_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 7", callback_data=f"app_7_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 8", callback_data=f"app_8_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 9", callback_data=f"app_9_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 10", callback_data=f"app_10_{tx_id}_{user_id}")
+            ],
+            [
                 InlineKeyboardButton("❌ ውድቅ አድርግ", callback_data=f"rej_{tx_id}_{user_id}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # በጊዚያዊነት የQR እና የደንበኛ መረጃዎችን መያዝ
         context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone}
         
         admin_caption = (
@@ -204,7 +211,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📞 **ስልክ ቁጥር፦** `{u_phone}`\n"
             f"🔹 **Ref ID፦** `{tx_id}`\n"
             f"🔗 [የባንክ ማረጋገጫ ሊንክ]({qr_data})\n\n"
-            f"💡 *እባክዎ ሪሲቱን አይተው ከታች ካሉት አማራጮች ስንት ዕጣ እንደሚገባው ይፍቀዱለት፦*"
+            f"💡 *እባክዎ ሪሲቱን አይተው ከታች ካሉት ቁጥሮች ስንት ዕጣ እንዲሰጠው ይጫኑ፦*"
         )
         
         await context.bot.send_photo(
@@ -215,7 +222,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         
-        # የተጠቃሚውን የደረጃ ሁኔታ ማጽዳት
         context.user_data.pop(user_id, None)
         
     except Exception as e:
@@ -252,7 +258,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u_name = cached.get('name')
         u_phone = cached.get('phone')
         
-        # የዕጣ ቁጥሮችን በዘፈቀደ (Randomly) መፍጠር
         tickets = generate_unique_tickets(count)
         if not tickets:
             await query.message.edit_caption("😔 ይቅርታ፣ የ3000 ዕጣ ቁጥሮች አልቀዋል።")
@@ -270,7 +275,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
             
-            # ለአንተ (Admin) የሚታይ
             await query.message.edit_caption(
                 f"✅ **ሪሲቱ ጸድቋል!**\n"
                 f"👤 ስም፦ {u_name}\n"
@@ -278,7 +282,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🎫 የተሰጡ ቁጥሮች፦ `{tickets_str}`"
             )
             
-            # ለደንበኛው የሚላክ
             user_msg = (
                 f"✅ **የገንዘብ ማረጋገጫዎ በባለቤቱ ጽድቋል!**\n\n"
                 f"🎉 **እንኳን ደስ አለዎት! በባለቤቱ ውሳኔ መሠረት የተሰጡዎት {count} የዕጣ ቁጥሮች፦**\n\n"
@@ -296,7 +299,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Regex('^(🏦 የተቀባይ አካውንት|📸 ሪሲት ለመላክ|🎁 ሽልማቶች|📞 በስልክ ለማግኘት)$') | filters.TEXT & ~filters.COMMAND, handle_text_buttons))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_buttons))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(admin_callback))
     
