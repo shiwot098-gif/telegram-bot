@@ -165,13 +165,13 @@ async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ['🏦 የተቀባይ አካውንት', '📸 ሪሲት ለመላክ'],
-        ['🎁 ሽልማቶች', '📞 በስልክ ለማግኘት']
+        ['🏦 ሒሳብ ቁፅሪ ንምርካብ', '🧾 ደረሰኝ ንምልኣክ'],
+        ['🎁 ዕፃታት', '☎️ ስልኪ ']
     ]
     markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
-        "👋 ሰላም! እንኳን ወደ ዕጣ ማውጫ ቦት በደህና መጡ። ከታች ያሉትን አማራጮች በመጠቀም መረጃ ማግኘትና ሪሲት መላክ ይችላሉ።",
+        "👋 ሰላም! እንኳዕ ብደሓን መፃኩም ! ኣብ ታሕቲ ብለሎ መማረፅታት ብምጥቃም ኣገልግሎት ትረክቡ ትክእሉ ።",
         reply_markup=markup
     )
 
@@ -179,39 +179,39 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text
     user_id = update.message.from_user.id
     
-    if text == '🏦 የተቀባይ አካውንት':
+    if text == '🏦 ሒሳብ ቁፅሪ ንምርካብ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "🏦 **የኢትዮጵያ ንግድ ባንክ (CBE)**\n\n"
-            "🔹 **የአካውንት ቁጥር፦** `1000 77 0064 779`\n"
-            "👤 **የአካውንት ስም፦** Tamrat Amare / Amanuel Hiwet\n\n"
-            "⚠️ *ማሳሰቢያ፦ እባክዎ በትክክለኛው አካውንት ላይ ማስገባትዎን ያረጋግጡ።*"
+            "🏦 የኢትዮጵያ ንግድ ባንክ (CBE)**\n\n"
+            "🔹 ሒሳብ ቁፅሪ፦`1000 77 0064 779`\n"
+            "👤 ስም፦ Tamrat Amare / Amanuel Hiwet\n\n"
+            "⚠️ መተሓሳሰቢ፦ በይዘኦም ንብ ትክክለኛ ሒሳብ ከምዘእተኩም አረጋግፁ።"
         )
         return
         
-    elif text == '🎁 ሽልማቶች':
+    elif text == '🎁 ዕፃታት':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "🎁 **የዕጣ ሽልማቶች ዝርዝር፦**\n\n"
-            "🥇 **1ኛ ዕጣ፦** BYD Seagull መኪና\n"
-            "🥈 **2ኛ ዕጣ፦** BYD Seagull መኪና\n"
-            "🥉 **3ኛ ዕጣ፦** BYD Seagull መኪና\n\n"
-            "🎉 *መልካም ዕድል! ለየእያንዳንዱ ግብይትዎ ዕጣዎችን ያግኙ።*"
+            "🎁 ናይ ዕፃታት ዝርዝር፦**\n\n"
+            "🥇 1ይ ዕፃ ፦ BYD Seagull መኪና\n"
+            "🥈 2ኛ ዕፃ ፦ BYD Seagull መኪና\n"
+            "🥉 3ኛ ዕፃ ፦ BYD Seagull መኪና\n\n"
+            "🎉 ፅቡቅ ዕድል ! ዕድል ልልሞከረ እዩ ይቁረፁ ይሸለሙ።"
         )
         return
         
-    elif text == '📞 በስልክ ለማግኘት':
+    elif text == '☎️ ስልኪ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "📞 **በስልክ ለማግኘት፦**\n\n"
-            "📱 `09 01 2686 86`\n\n"
-            "💬 ማንኛውም ጥያቄ ካለዎት መደወል ይችላሉ።"
+            "☎️ ብስልኪ ንምርካብ ፦**\n\n"
+            "📲 `09 01 2686 86 `\n\n"
+            "💬 ልኮነ ዓይነት ጥያቄ ወይ ኣስተያየት ንምሃብ ይደዉሉ።"
         )
         return
         
-    elif text == '📸 ሪሲት ለመላክ':
+    elif text == '🧾 ደረሰኝ ንምልኣክ':
         context.user_data[user_id] = {'step': 'get_name'}
-        await update.message.reply_text("👤 **ሪሲት ለመላክ መጀመሪያ ሙሉ ስምዎን ያስገቡ፦**")
+        await update.message.reply_text("👤 ንምምዝጋብ ስም ይልኣኩ ፦**")
         return
 
     state = context.user_data.get(user_id)
@@ -219,7 +219,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         if state.get('step') == 'get_name':
             context.user_data[user_id]['name'] = text
             context.user_data[user_id]['step'] = 'get_phone'
-            await update.message.reply_text("📞 **በመቀጠል ስልክ ቁጥርዎን ያስገቡ፦**")
+            await update.message.reply_text("📞 ብምቅፃል ስልኪ ቁፅሪ ይልኣኩ ፦**")
             
         elif state and state.get('step') == 'get_phone':
             context.user_data[user_id]['phone'] = text
@@ -231,7 +231,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get(user_id)
     
     if not state or state.get('step') != 'get_photo':
-        await update.message.reply_text("⚠️ እባክዎ መጀመሪያ ሜኑ ላይ ያለውን **'📸 ሪሲት ለመላክ'** የሚለውን ቁልፍ ተጭነው ስምና ስልክዎን ያስገቡ።")
+        await update.message.reply_text("⚠️ በይዘኦም አብቲ መማረፂ ዘሎ '🧾 ደረሰኝ ንምልኣክ'*ዝብል ብምጥቃም ስም ስልኪ እና ደረሰኝ ይልኣኩ።")
         return
         
     import cv2
@@ -246,7 +246,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         qr_data, _, _ = detector.detectAndDecode(img)
         
         if not qr_data:
-            await update.message.reply_text("⚠️ በምስሉ ላይ የQR ኮድ ማግኘት አልተቻለም። እባክዎ የQR ኮዱ በግልጽ የሚታይበት ሙሉ ፎቶ መልሰው ይላኩ።")
+            await update.message.reply_text("⚠️ ኣብዚ ፎቶ QR ኮድ ክርከብ ኣይከኣለይ። በይዛኩም QR ኮድ ብግልፂ ዘርኢ ፎቶ ደጊሞም ይልኣኩ።")
             return
 
         url_match = re.search(r'v2-([A-Za-z0-9]+)', qr_data)
@@ -258,34 +258,34 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if result:
             tickets_formatted = " , ".join([f"`【 {t.strip()} 】`" for t in result[0].split(",")])
             await update.message.reply_text(
-                f"❌ **ማስጠንቀቂያ፦ ይህ ሪሲት ከዚህ በፊት ተመዝግቧል!**\n\n"
-                f"🏆 የነበረዎት የዕጣ ቁጥር፦ {tickets_formatted} ነበር።"
-            )
+                f"❌ መጠንቀቅታ ፦ እዚ ደረሰኝ ቀዲሙ ተመዝጊቡ ኔሩ እዩ!**\n\n"
+                f"👉 ዝነበረ ዕፃ ቁፅሪ፦ {tickets_formatted} እዩ።"
+        
             context.user_data.pop(user_id, None)
             return
 
-        await update.message.reply_text("⚡ ሪሲትዎ እና መረጃዎ ደርሶኛል! በባለቤቱ እየተረጋገጠ ስለሆነ ጥቂት ደቂቃዎችን ይጠብቁ...")
+        await update.message.reply_text("⚡ ደረሰኝ ተቀቢለ አለኩ! እናተረጋገፀ ስለ ዝኮነ ድሕሪ ዝተወሰነ ግዜ ዕፃ ክበፅሖም እዩ...")
         
         u_name = state.get('name')
         u_phone = state.get('phone')
         
         keyboard = [
             [
-                InlineKeyboardButton("🎟 1", callback_data=f"app_1_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 2", callback_data=f"app_2_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 3", callback_data=f"app_3_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 4", callback_data=f"app_4_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 5", callback_data=f"app_5_{tx_id}_{user_id}")
+                InlineKeyboardButton("👍 1", callback_data=f"app_1_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 2", callback_data=f"app_2_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 3", callback_data=f"app_3_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 4", callback_data=f"app_4_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 5", callback_data=f"app_5_{tx_id}_{user_id}")
             ],
             [
-                InlineKeyboardButton("🎟 6", callback_data=f"app_6_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 7", callback_data=f"app_7_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 8", callback_data=f"app_8_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 9", callback_data=f"app_9_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 10", callback_data=f"app_10_{tx_id}_{user_id}")
+                InlineKeyboardButton("👍 6", callback_data=f"app_6_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 7", callback_data=f"app_7_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 8", callback_data=f"app_8_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 9", callback_data=f"app_9_{tx_id}_{user_id}"),
+                InlineKeyboardButton("👍 10", callback_data=f"app_10_{tx_id}_{user_id}")
             ],
             [
-                InlineKeyboardButton("❌ ውድቅ አድርግ", callback_data=f"rej_{tx_id}_{user_id}")
+                InlineKeyboardButton("❌ ትክክል ኣይኮነን", callback_data=f"rej_{tx_id}_{user_id}")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -293,12 +293,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone}
         
         admin_caption = (
-            f"🔔 **አዲስ የሪሲት ጥያቄ መጥቷል!**\n\n"
-            f"👤 **የደንበኛ ስም፦** `{u_name}`\n"
-            f"📞 **ስልክ ቁጥር፦** `{u_phone}`\n"
-            f"🔹 **Ref ID፦** `{tx_id}`\n"
+            f"🔔 ሓዱሽ ጥያቄ መፂኡ!**\n\n"
+            f"👤 ናደንበኛ ስም ፦ `{u_name}`\n"
+            f"📞 ስልኪ ቁፅሪ ፦ `{u_phone}`\n"
+            f"🔹 Ref ID ፦ `{tx_id}`\n"
             f"🔗 [የባንክ ማረጋገጫ ሊንክ]({qr_data})\n\n"
-            f"💡 *እባክዎ ሪሲቱን አይተው ከታች ካሉት ቁጥሮች ስንት ዕጣ እንዲሰጠው ይጫኑ፦*"
+            f"💡 *ክንደይ ትኬት ክህቦ፦*"
         )
         
         await context.bot.send_photo(
@@ -326,11 +326,11 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data.startswith("rej_"):
         _, tx_id, user_id = data.split("_")
-        await query.message.edit_caption("❌ ይህ ሪሲት በርስዎ ውድቅ ተደርጓል።")
+        await query.message.edit_caption("❌ ደረሰኝ ውድ ተገይሩ ኣሎ።")
         try:
             await context.bot.send_message(
                 chat_id=int(user_id), 
-                text="❌ **ይቅርታ፣ የላኩት ሪሲት በባለቤቱ ውድቅ ተደርጓል።**\n⚠️ እባክዎ ትክክለኛ ሪሲት መላክዎን ያረጋግጡ።"
+                text="❌ ይቅርታ ዝለኣክዎ ደረሰኝ ውድቅ ተገይሩ ኣሎ።**\n⚠️ በይዘኦም ትክክለኛ ደረሰኝ ደጊሞም ንምእታው ይሞክሩ"
             )
         except:
             pass
@@ -363,22 +363,22 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
             
             await query.message.edit_caption(
-                f"✅ **ሪሲቱ ጸድቋል!**\n"
+                f"✅ ደረሰኝ ፀዲቁ ኣሎ!**\n"
                 f"👤 ስም፦ {u_name}\n"
-                f"🔢 የተፈቀደ የዕጣ ብዛት፦ {count}\n"
-                f"🎫 የተሰጡ ቁጥሮች፦ `{tickets_str}`"
+                f"🔢 ዝተፈቀደ በዝሒ ዕፃ ፦ {count}\n"
+                f"🎫 ዝተውሃቡ ዕፃታት ፦ `{tickets_str}`"
             )
             
             user_msg = (
-                f"✅ **የገንዘብ ማረጋገጫዎ በባለቤቱ ጽድቋል!**\n\n"
-                f"🎉 **እንኳን ደስ አለዎት! በባለቤቱ ውሳኔ መሠረት የተሰጡዎት {count} የዕጣ ቁጥሮች፦**\n\n"
+                f"✅ ደረሰኞም ፀዲቁ ኣሎ!**\n\n"
+                f"🎉 እንኳዕ ደስ በለኩም! ዝተውሃብዎም በዝሒ ዕፃ {count} ዕፃ ቁፅሪ እዩ ፦**\n\n"
                 f"{tickets_formatted}\n\n"
-                f"*(እነዚህ ቁጥሮች በፍጹም አይደገሙም፤ በጥንቃቄ ይያዙ)*"
+                f"*( ዕፃ ቁፅሪ ከይጠፍእ ከይርሳዕ )*"
             )
             await context.bot.send_message(chat_id=int(user_id), text=user_msg, parse_mode="Markdown")
             
         except sqlite3.IntegrityError:
-            await query.message.edit_caption("❌ ይህ ሪሲት አስቀድሞ ተመዝግቧል።")
+            await query.message.edit_caption("❌ እዚ ደረሰኝ ኣቀዲሙ ተመዝጊቡ ዝነበረ እዩ ።")
 
 # =======================
 # MAIN ASYNC FUNCTION
@@ -396,7 +396,7 @@ async def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(admin_callback))
     
-    print("ቦቱ ሙሉ በሙሉ ተዘምኖ ሥራ ጀምሯል...")
+    print("እዚ ቦት ሙሉእ ንሙሉእ ስራሕ ጀሚሩ ኣሎ...")
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
