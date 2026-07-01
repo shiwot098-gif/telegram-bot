@@ -8,13 +8,13 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
 
 from PIL import Image
-import pytesseract
-from pyzbar.pyzbar import decode
+# ማሳሰቢያ፡ pyzbar ን እዚህ ላይ አጥፍተነዋል
 
 # =======================
 # CONFIG
 # =======================
-TOKEN = os.getenv("8611743019:AAGEHD_MZTciUYBVatUTcJC5uCw-OM5Ij3U")
+# የቶከን አጻጻፍ ስህተቱ እዚህ ላይ ተስተካክሏል
+TOKEN = os.getenv("BOT_TOKEN", "8611743019:AAGEHD_MZTciUYBVatUTcJC5uCw-OM5Ij3U")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS transactions (
 )
 """)
 conn.commit()
+
+# እዚህ በታች ያሉትን የቦትህን ቀጣይ ተግባራት (functions) እንደነበሩ ቀጥልባቸው...
 
 # =======================
 # HELPERS
