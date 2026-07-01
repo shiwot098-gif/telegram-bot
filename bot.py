@@ -49,8 +49,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =======================
 if __name__ == "__main__":
     # ቦቱን የመቀስቀሻ ክፍል
-    app = ApplicationBuilder().token(TOKEN).build()
-    
+    app = ApplicationBuilder().token(TOKEN).concurrent_updates(False).build()
+
     # ትዕዛዞችን ማገናኛ (Handlers)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
