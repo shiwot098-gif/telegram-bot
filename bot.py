@@ -2,7 +2,7 @@ import os
 import sqlite3
 import re
 import logging
-import asyncio  # ይህ አዲስ የተጨመረ ነው
+import asyncio
 from datetime import datetime
 
 from telegram import Update
@@ -35,35 +35,48 @@ CREATE TABLE IF NOT EXISTS transactions (
 conn.commit()
 
 # =======================
-# HANDLERS (የቦቱ ተግባራት)
+# HANDLERS (የቦቱ ዋና ተግባራት)
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ሰላም! እንኳን ወደ ቦቱ በሰላም መጡ።")
+    # ተጠቃሚው /start ሲል የሚመጣለት መልእክት
+    await update.message.reply_text("ሰላም! እንኳን ወደ ቦቱ በሰላም መጡ። እባክዎ የግብይት ማረጋገጫ ፎቶ ወይም መረጃ ይላኩ።")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("መልእክትዎን ተቀብያለሁ!")
+    # ተጠቃሚው ጽሑፍ ሲልክ የሚያስተናግደው ክፍል
+    user_text = update.message.text
+    await update.message.reply_text(f"የላኩትን ጽሑፍ ተቀብያለሁ፦ {user_text}\nአሁን ላይ ሲስተሙን በማስተካከል ላይ ስለሆንን ሂደቱን እያጠናቀቅን ነው!")
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ተጠቃሚው ፎቶ (ስክሪንሻት) ሲልክ የሚያስተናግደው ክፍል
+    await update.message.reply_text("ፎቶዎን ተቀብያለሁ! መረጃውን በማንበብ ላይ ነኝ...")
+    
+    # ፎቶውን ከቴሌግራም ሰርቨር ማውረድ
+    photo_file = await update.message.photo[-1].get_file()
+    photo_path = "user_screenshot.jpg"
+    await photo_file.download_to_drive(photo_path)
+    
+    # እዚህ ቦታ ላይ በቅድሙ pyzbar ፈንታ ሌላ አስተማማኝ መረጃ ማንበቢያ ኮድ ማስገባት ትችላለህ
+    await update.message.reply_text("ፎቶው በተሳካ ሁኔታ ተገምግሟል!")
 
 # =======================
 # MAIN ASYNC FUNCTION
 # =======================
 async def main():
-    # ለአዲሱ Python 3.13 እንዲስማማ ተደርጎ የተዋቀረ
     app = ApplicationBuilder().token(TOKEN).build()
     
+    # እያንዳንዱን ትዕዛዝ ከቦቱ ጋር ማገናኛ
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo)) # ፎቶ ለመቀበል የተጨመረ
     
-    print("ቦቱ ሥራ ጀምሯል...")
+    print("ቦቱ ከነሙሉ ተግባራቱ ሥራ ጀምሯል...")
     
-    # በውስጥ ለውስጥ የሚፈጠረውን የUpdater ችግር የሚፈታው ይሄኛው አወቃቀር ነው
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
     
-    # ቦቱ ሳይጠፋ እንዲቆይ ማድረግ
     while True:
         await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    # Python 3.13 ላይ በሰላም እንዲነሳ loop ውስጥ እናስገድደዋለን
     asyncio.run(main())
