@@ -93,6 +93,13 @@ def check_and_save_tickets(tx_id, qr_text, amount_value):
 
 def parse_image_details(image_path):
     try:
+        # ለፍጥነት ሲባል ምስሉን በስተጀርባ ማሳነስ (Optimize image for faster OCR)
+        img = cv2.imread(image_path)
+        height, width = img.shape[:2]
+        if height > 1000 or width > 1000:
+            img = cv2.resize(img, (800, int(800 * height / width)))
+            cv2.imwrite(image_path, img)
+
         results = reader.readtext(image_path, detail=0)
         full_text = " ".join(results)
         
@@ -125,19 +132,19 @@ def parse_image_details(image_path):
         if sender_match:
             sender = sender_match.group(1).strip()
             
-        # 4. የተቀባይ ስም መፈለጊያ (Tamrat Amare ወይም Amanuel Hiwot)
+        # 4. የተቀባይ ስም መፈለጊያ (Amanuel Hiwet በ 'e' ፊደል ተስተካክሏል)
         if re.search(r'Tamrat\s+Amare', full_text, re.IGNORECASE):
             receiver = "Tamrat Amare"
-        elif re.search(r'Amanuel\s+Hiwot', full_text, re.IGNORECASE):
-            receiver = "Amanuel Hiwot"
+        elif re.search(r'Amanuel\s+Hiw[oe]t', full_text, re.IGNORECASE):
+            receiver = "Amanuel Hiwet"
         else:
-            # በግልጽ ካልተጻፈ ሌላ የጽሑፍ ፍንጭ መፈለጊያ
             for word in results:
-                if "tamrat" in word.lower() or "amare" in word.lower():
+                w_low = word.lower()
+                if "tamrat" in w_low or "amare" in w_low:
                     receiver = "Tamrat Amare"
                     break
-                if "amanuel" in word.lower() or "hiwot" in word.lower():
-                    receiver = "Amanuel Hiwot"
+                if "amanuel" in w_low or "hiw" in w_low:
+                    receiver = "Amanuel Hiwet"
                     break
             
         return amount_num, amount_str, tx_id, sender, receiver
@@ -149,13 +156,14 @@ def parse_image_details(image_path):
 # HANDLERS
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ሰላም! እባክዎ ለ Tamrat Amare ወይም Amanuel Hiwot የተላለፈበትን ትክክለኛ የባንክ ሪሲት ፎቶ ይላኩ።")
+    await update.message.reply_text("ሰላም! እባክዎ ለ Tamrat Amare ወይም Amanuel Hiwet የተላለፈበትን ትክክለኛ የባንክ ሪሲት ፎቶ ይላኩ።")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ፎቶዎን ተቀብያለሁ! መረጃውን (የተቀባይ ስም፣ የብር መጠንና ዕጣ) እያረጋገጥኩ ነው፣ እባክዎ ጥቂት ሰከንዶችን ይጠብቁ...")
+    await update.message.reply_text("ፎቶዎን ተቀብያለሁ! መረጃውን (የተቀባይ ስም፣ የብር መጠንና ዕጣ) በፍጥነት እያረጋገጥኩ ነው...")
     
     photo_file = await update.message.photo[-1].get_file()
     photo_path = "user_screenshot.jpg"
+    await update.message.photo[-1].get_file()
     await photo_file.download_to_drive(photo_path)
     
     try:
@@ -174,47 +182,55 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 tx_id = qr_data[-15:]
 
-        # 🛑 ጥብቅ ማጣሪያ 1፡ የተቀባይ ስም ማረጋገጫ
+        # 🛑 ጥብቅ ማጣሪያ፦ የተቀባይ ስም ማረጋገጫ (ወደ ሌላ ሰው ከተላከ የሚሰጠው ምላሽ)
         if receiver == "ያልታወቀ":
-            await update.message.reply_text("❌ **ይቅርታ፣ ይህ ሪሲት ተቀባይነት የለውም!**\n\n⚠️ ሪሲቱ ለ **Tamrat Amare** ወይም ለ **Amanuel Hiwot** የተላከ መሆኑን ቦቱ ማረጋገጥ አልቻለም። እባክዎ ስሙ በግልጽ የሚታይ ትክክለኛ ፎቶ ይላኩ።")
+            await update.message.reply_text(
+                "❌ **ይቅርታ፣ ይህ ሪሲት ተቀባይነት የለውም!**\n\n"
+                "⚠️ ሪሲቱ ለ **Tamrat Amare** ወይም ለ **Amanuel Hiwet** የተላከ መሆኑን ቦቱ ማረጋገጥ አልቻለም።\n\n"
+                "💡 **እባክዎ ትክክለኛ አካውንት ተጠቅማችሁ ወደ Tamrat Amare ወይም Amanuel Hiwet ያስገቡ።**"
+            )
             return
 
-        if tx_id != "ያልታወቀ":
-            # 3. በዳታቤዝ ውስጥ ማረጋገጥና የዕጣ ቁጥሮችን መስጠት
-            is_new, tickets = check_and_save_tickets(tx_id, qr_data if qr_data else "No QR", amount_num)
-            
-            if is_new == "FULL":
-                await update.message.reply_text("😔 ይቅርታ፣ ሁሉም የ3000 ዕጣ ቁጥሮች አልቀዋል።")
-                return
-                
-            if is_new:
-                status_msg = "✅ **አዲስ የግብይት ማረጋገጫ ተረጋግጧል!**"
-                tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
-                ticket_msg = (
-                    f"🎉 **እንኳን ደስ አለዎት! በከፈሉት ብር መጠን ልክ የተሰጡዎት {len(tickets)} የዕጣ ቁጥሮች፦**\n\n"
-                    f"{tickets_formatted}\n\n"
-                    f"*(እነዚህ ቁጥሮች በፍጹም አይደገምም፤ በጥንቃቄ ይያዙ)*"
-                )
+        if tx_id == "ያልታወቀ":
+            if qr_data:
+                tx_id = qr_data[-15:]
             else:
-                status_msg = "❌ **ማስጠንቀቂያ፦ ድጋሚ የተላከ (የቆየ) መረጃ!**"
-                tickets_formatted = " , ".join([f"`【 {t} 】`" for t in tickets])
-                ticket_msg = f"⚠️ ይህ ሪሲት ቀደም ሲል ተመዝግቧል። የነበሩዎት የዕጣ ቁጥሮች፦ {tickets_formatted} ነበሩ።"
+                await update.message.reply_text("⚠️ ሪሲቱን ማስተናገድ አልተቻለም። እባክዎ የግብይት ቁጥሩ (Ref ID) በግልጽ የሚታይበት ትክክለኛ ፎቶ ይላኩ።")
+                return
+
+        # 3. በዳታቤዝ ውስጥ ማረጋገጥና የዕጣ ቁጥሮችን መስጠት
+        is_new, tickets = check_and_save_tickets(tx_id, qr_data if qr_data else "No QR", amount_num)
+        
+        if is_new == "FULL":
+            await update.message.reply_text("😔 ይቅርታ፣ ሁሉም የ3000 ዕጣ ቁጥሮች አልቀዋል።")
+            return
             
-            link_str = f"[ሊንኩን ለመክፈት እዚህ ይጫኑ]({qr_data})" if qr_data else "የQR ኮድ የለም"
-            
-            detailed_response = (
-                f"{status_msg}\n\n"
-                f"📊 **የተገኘ የሪሲት ዝርዝር፦**\n"
-                f"🔹 **Ref ID፦** `{tx_id}`\n"
-                f"🔹 **የገንዘብ መጠን፦** `{amount_str}`\n"
-                f"🔹 **ላኪ፦** `{sender}`\n"
-                f"🔹 **ተቀባይ፦** `✅ {receiver}`\n"
-                f"🔗 **የባንክ ማረጋገጫ፦** {link_str}\n\n"
-                f"{ticket_msg}"
+        if is_new:
+            status_msg = "✅ **አዲስ የግብይት ማረጋገጫ ተረጋግጧል!**"
+            tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
+            ticket_msg = (
+                f"🎉 **እንኳን ደስ አለዎት! በከፈሉት ብር መጠን ልክ የተሰጡዎት {len(tickets)} የዕጣ ቁጥሮች፦**\n\n"
+                f"{tickets_formatted}\n\n"
+                f"*(እነዚህ ቁጥሮች በፍጹም አይደገምም፤ በጥንቃቄ ይያዙ)*"
             )
-            await update.message.reply_text(detailed_response, parse_mode="Markdown")
         else:
-            await update.message.reply_text("⚠️ ሪሲቱን ማስተናገድ አልተቻለም። እባክዎ የግብይት ቁጥሩ (Ref ID) በግልጽ የሚታይበት ትክክለኛ ፎቶ ይላኩ።")
+            status_msg = "❌ **ማስጠንቀቂያ፦ ድጋሚ የተላከ (የቆየ) መረጃ!**"
+            tickets_formatted = " , ".join([f"`【 {t} 】`" for t in tickets])
+            ticket_msg = f"⚠️ ይህ ሪሲት ቀደም ሲል ተመዝግቧል። የነበሩዎት የዕጣ ቁጥሮች፦ {tickets_formatted} ነበሩ።"
+        
+        link_str = f"[ሊንኩን ለመክፈት እዚህ ይጫኑ]({qr_data})" if qr_data else "የQR ኮድ የለም"
+        
+        detailed_response = (
+            f"{status_msg}\n\n"
+            f"📊 **የተገኘ የሪሲት ዝርዝር፦**\n"
+            f"🔹 **Ref ID፦** `{tx_id}`\n"
+            f"🔹 **የገንዘብ መጠን፦** `{amount_str}`\n"
+            f"🔹 **ላኪ፦** `{sender}`\n"
+            f"🔹 **ተቀባይ፦** `✅ {receiver}`\n"
+            f"🔗 **የባንክ ማረጋገጫ፦** {link_str}\n\n"
+            f"{ticket_msg}"
+        )
+        await update.message.reply_text(detailed_response, parse_mode="Markdown")
             
     except Exception as e:
         logging.error(f"Error: {e}")
