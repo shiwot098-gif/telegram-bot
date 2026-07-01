@@ -105,12 +105,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         qr_data, _, _ = detector.detectAndDecode(img)
         
         if qr_data:
-            # ከባንክ የQR ሊንክ ላይ ልዩ መለያ ቁጥሩን መቁረጥ (ለምሳሌ፡ ከ v2-hfHCx... ላይ 'hfHCx...' ይወስዳል)
+            # ከባንክ የQR ሊንክ ላይ ልዩ መለያ ቁጥሩን መቁረጥ
             url_match = re.search(r'v2-([A-Za-z0-9]+)', qr_data)
             if url_match:
                 tx_id = url_match.group(1)
             else:
-                # ሊንኩ የንግድ ባንክ ካልሆነ የሊንኩን መጨረሻ 15 ፊደላት እንደ መለያ ይወስዳል
                 tx_id = qr_data[-15:]
 
             # በዳታቤዝ ውስጥ ማረጋገጥ እና የዕጣ ቁጥር መስጠት
@@ -133,10 +132,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status_msg = "❌ **ማስጠንቀቂያ፦ ይህ ፎቶ/ግብይት ከዚህ በፊት ተልኳል!**"
                 ticket_msg = f"⚠️ ይህ የQR ኮድ ቀደም ሲል ተመዝግቧል። የነበረዎት የዕጣ ቁጥር፦ `【 {ticket_no} 】` ነበር።"
             
+            # እዚህ ጋር ሊንኩ ተደብቆ በ "ሊንኩን ለመክፈት እዚህ ይጫኑ" መልክ ተዘጋጅቷል
             detailed_response = (
                 f"{status_msg}\n\n"
-                f"🔗 **የባንክ ማረጋገጫ ሊንክ፦**\n`{qr_data}`\n\n"
-                f"ℹ️ *ማሳሰቢያ፦ ከላይ ያለውን ሊንክ በመንካት የተላለፈውን የብር መጠን እና የተቀባዩን ስም ማረጋገጥ ይችላሉ።*\n\n"
+                f"🔗 **የባንክ ማረጋገጫ፦** [ሊንኩን ለመክፈት እዚህ ይጫኑ]({qr_data})\n"
+                f"ℹ️ *ማሳሰቢያ፦ ከላይ ያለውን ሰማያዊ ጽሑፍ በመንካት የተላለፈውን የብር መጠን እና የተቀባዩን ስም ማረጋገጥ ይችላሉ።*\n\n"
                 f"{ticket_msg}"
             )
             await update.message.reply_text(detailed_response, parse_mode="Markdown")
