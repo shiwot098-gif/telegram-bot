@@ -6,21 +6,23 @@ import re
 import random
 from datetime import datetime
 
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
-
-import cv2
-import numpy as np
-import easyocr
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder, 
+    MessageHandler, 
+    CommandHandler, 
+    ContextTypes, 
+    CallbackQueryHandler, 
+    filters
+)
 
 # =======================
 # CONFIG
 # =======================
 TOKEN = os.getenv("BOT_TOKEN", "8611743019:AAGEHD_MZTciUYBVatUTcJC5uCw-OM5Ij3U")
-logging.basicConfig(level=logging.INFO)
+ADMIN_ID = 5942828479  # ያቀረቡት የእርስዎ ID
 
-# OCR አንባቢን ማዘጋጀት
-reader = easyocr.Reader(['en'], gpu=False)
+logging.basicConfig(level=logging.INFO)
 
 # =======================
 # DATABASE SETUP
@@ -31,10 +33,13 @@ cursor = conn.cursor()
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    transaction_id TEXT,
+    transaction_id TEXT UNIQUE,
     qr_data TEXT,
     status TEXT,
-    ticket_number INTEGER,
+    ticket_number TEXT,
+    user_id TEXT,
+    user_name TEXT,
+    user_phone TEXT,
     created_at TEXT
 )
 """)
@@ -43,10 +48,16 @@ conn.commit()
 # =======================
 # HELPERS
 # =======================
-def generate_multiple_tickets(count):
+def generate_unique_tickets(count):
     try:
         cursor.execute("SELECT ticket_number FROM transactions WHERE ticket_number IS NOT NULL")
-        used_tickets = {row[0] for row in cursor.fetchall()}
+        all_rows = cursor.fetchall()
+        
+        used_tickets = set()
+        for row in all_rows:
+            if row[0]:
+                for num in row[0].split(","):
+                    used_tickets.add(int(num.strip()))
         
         if len(used_tickets) + count > 3000:
             return []
@@ -61,184 +72,223 @@ def generate_multiple_tickets(count):
         logging.error(f"Ticket error: {e}")
         return [random.randint(1, 3000) for _ in range(count)]
 
-def check_and_save_tickets(tx_id, qr_text, amount_value):
-    try:
-        cursor.execute("SELECT ticket_number FROM transactions WHERE transaction_id = ?", (tx_id,))
-        results = cursor.fetchall()
-        
-        if results:
-            return False, [row[0] for row in results]
-        
-        # ለእያንዳንዱ 2500 ብር 1 ትኬት ማሰላት
-        ticket_count = int(amount_value // 2500)
-        if ticket_count < 1:
-            ticket_count = 1
-            
-        ticket_numbers = generate_multiple_tickets(ticket_count)
-        if not ticket_numbers:
-            return "FULL", None
-            
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        for t_num in ticket_numbers:
-            cursor.execute(
-                "INSERT INTO transactions (transaction_id, qr_data, status, ticket_number, created_at) VALUES (?, ?, ?, ?, ?)",
-                (tx_id, qr_text, "COMPLETED", t_num, current_time)
-            )
-        conn.commit()
-        return True, ticket_numbers
-    except Exception as e:
-        logging.error(f"Database error: {e}")
-        return False, []
-
-def parse_image_details(image_path):
-    try:
-        # ለፍጥነት ሲባል ምስሉን በስተጀርባ ማሳነስ (Optimize image for faster OCR)
-        img = cv2.imread(image_path)
-        height, width = img.shape[:2]
-        if height > 1000 or width > 1000:
-            img = cv2.resize(img, (800, int(800 * height / width)))
-            cv2.imwrite(image_path, img)
-
-        results = reader.readtext(image_path, detail=0)
-        full_text = " ".join(results)
-        
-        amount_num = 2500.00
-        amount_str = "2,500.00 ETB"
-        sender = "በሊንኩ ያረጋግጡ"
-        receiver = "ያልታወቀ"
-        tx_id = "ያልታወቀ"
-        
-        # 1. የብር መጠን መፈለጊያ
-        amt_match = re.search(r'(?:Debited|Amount|Total)[:\s]*([\d,]+\.\d{2})', full_text, re.IGNORECASE)
-        if amt_match:
-            clean_amt = amt_match.group(1).replace(',', '')
-            amount_num = float(clean_amt)
-            amount_str = f"{amt_match.group(1)} ETB"
-        else:
-            amt_match2 = re.search(r'([\d,]+\.\d{2})\s*ETB', full_text)
-            if amt_match2:
-                clean_amt = amt_match2.group(1).replace(',', '')
-                amount_num = float(clean_amt)
-                amount_str = f"{amt_match2.group(1)} ETB"
-
-        # 2. የግብይት ቁጥር (Ref ID) መፈለጊያ
-        id_match = re.search(r'(FT[A-Z0-9]{10,})', full_text)
-        if id_match:
-            tx_id = id_match.group(1)
-            
-        # 3. ላኪ መፈለጊያ
-        sender_match = re.search(r'from\s+([A-Za-z\s\/]+)(?:ETB|for)', full_text, re.IGNORECASE)
-        if sender_match:
-            sender = sender_match.group(1).strip()
-            
-        # 4. የተቀባይ ስም መፈለጊያ (Amanuel Hiwet በ 'e' ፊደል ተስተካክሏል)
-        if re.search(r'Tamrat\s+Amare', full_text, re.IGNORECASE):
-            receiver = "Tamrat Amare"
-        elif re.search(r'Amanuel\s+Hiw[oe]t', full_text, re.IGNORECASE):
-            receiver = "Amanuel Hiwet"
-        else:
-            for word in results:
-                w_low = word.lower()
-                if "tamrat" in w_low or "amare" in w_low:
-                    receiver = "Tamrat Amare"
-                    break
-                if "amanuel" in w_low or "hiw" in w_low:
-                    receiver = "Amanuel Hiwet"
-                    break
-            
-        return amount_num, amount_str, tx_id, sender, receiver
-    except Exception as e:
-        logging.error(f"OCR Error: {e}")
-        return 2500.00, "2,500.00 ETB", "ያልታወቀ", "በሊንኩ ያረጋግጡ", "ያልታወቀ"
-
 # =======================
 # HANDLERS
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ሰላም! እባክዎ ለ Tamrat Amare ወይም Amanuel Hiwet የተላለፈበትን ትክክለኛ የባንክ ሪሲት ፎቶ ይላኩ።")
+    # የታችኛው ሜኑ አዝራሮች (Keyboard Buttons)
+    reply_keyboard = [
+        ['🏦 የተቀባይ አካውንት', '📸 ሪሲት ለመላክ'],
+        ['🎁 ሽልማቶች', '📞 በስልክ ለማግኘት']
+    ]
+    markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "👋 ሰላም! እንኳን ወደ ዕጣ ማውጫ ቦት በደህና መጡ። ከታች ያሉትን አማራጮች በመጠቀም መረጃ ማግኘትና ሪሲት መላክ ይችላሉ።",
+        reply_markup=markup
+    )
+
+async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    user_id = update.message.from_user.id
+    
+    if text == '🏦 የተቀባይ አካውንት':
+        await update.message.reply_text(
+            "🏦 **የኢትዮጵያ ንግድ ባንክ (CBE)**\n\n"
+            "🔹 **የአካውንት ቁጥር፦** `1000 77 0064 779`\n"
+            "👤 **የአካውንት ስም፦** Tamrat Amare / Amanuel Hiwet\n\n"
+            "⚠️ *ማሳሰቢያ፦ እባክዎ በትክክለኛው አካውንት ላይ ማስገባትዎን ያረጋግጡ።*"
+        )
+        
+    elif text == '🎁 ሽልማቶች':
+        await update.message.reply_text(
+            "🎁 **የዕጣ ሽልማቶች ዝርዝር፦**\n\n"
+            "🥇 **1ኛ ዕጣ፦** BYD Seagull መኪና\n"
+            "🥈 **2ኛ ዕጣ፦** BYD Seagull መኪና\n"
+            "🥉 **3ኛ ዕጣ፦** BYD Seagull መኪና\n\n"
+            "🎉 *መልካም ዕድል! ለየእያንዳንዱ ግብይትዎ ዕጣዎችን ያግኙ።*"
+        )
+        
+    elif text == '📞 በስልክ ለማግኘት':
+        await update.message.reply_text(
+            "📞 **በስልክ ለማግኘት፦**\n\n"
+            "📱 `09 01 2686 86`\n\n"
+            "💬 ማንኛውም ጥያቄ ካለዎት መደወል ይችላሉ።"
+        )
+        
+    elif text == '📸 ሪሲት ለመላክ':
+        context.user_data[user_id] = {'step': 'get_name'}
+        await update.message.reply_text("👤 **ሪሲት ለመላክ መጀመሪያ ሙሉ ስምዎን ያስገቡ፦**")
+        
+    else:
+        # የባለብዙ ደረጃ (Form) አሞላል ሂደት
+        state = context.user_data.get(user_id)
+        if state and state.get('step') == 'get_name':
+            context.user_data[user_id]['name'] = text
+            context.user_data[user_id]['step'] = 'get_phone'
+            await update.message.reply_text("📞 **በመቀጠል ስልክ ቁጥርዎን ያስገቡ፦**")
+            
+        elif state and state.get('step') == 'get_phone':
+            context.user_data[user_id]['phone'] = text
+            context.user_data[user_id]['step'] = 'get_photo'
+            await update.message.reply_text("📸 **በጣም ጥሩ! አሁን የባንክ ሪሲቱን ፎቶ (Screenshot) ይላኩ፦**")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ፎቶዎን ተቀብያለሁ! መረጃውን (የተቀባይ ስም፣ የብር መጠንና ዕጣ) በፍጥነት እያረጋገጥኩ ነው...")
+    user_id = update.message.from_user.id
+    state = context.user_data.get(user_id)
     
-    photo_file = await update.message.photo[-1].get_file()
-    photo_path = "user_screenshot.jpg"
-    await update.message.photo[-1].get_file()
-    await photo_file.download_to_drive(photo_path)
+    # መጀመሪያ ስምና ስልክ ማስገባታቸውን ማረጋገጥ
+    if not state or state.get('step') != 'get_photo':
+        await update.message.reply_text("⚠️ እባክዎ መጀመሪያ ሜኑ ላይ ያለውን **'📸 ሪሲት ለመላክ'** የሚለውን ቁልፍ ተጭነው ስምና ስልክዎን ያስገቡ።")
+        return
+        
+    import cv2
+    photo_file = update.message.photo[-1]
+    file_info = await photo_file.get_file()
+    photo_path = f"temp_{user_id}.jpg"
+    await file_info.download_to_drive(photo_path)
     
     try:
-        # 1. መረጃዎችን ከፎቶው ላይ ማንበብ
-        amount_num, amount_str, tx_id, sender, receiver = parse_image_details(photo_path)
-        
-        # 2. የQR ኮዱን ማንበብ
+        # 1. የQR ኮዱን ማንበብ
         img = cv2.imread(photo_path)
         detector = cv2.QRCodeDetector()
         qr_data, _, _ = detector.detectAndDecode(img)
         
-        if qr_data and tx_id == "ያልታወቀ":
-            url_match = re.search(r'v2-([A-Za-z0-9]+)', qr_data)
-            if url_match:
-                tx_id = url_match.group(1)[:12].upper()
-            else:
-                tx_id = qr_data[-15:]
+        if not qr_data:
+            await update.message.reply_text("⚠️ በምስሉ ላይ የQR ኮድ ማግኘት አልተቻለም። እባክዎ የQR ኮዱ በግልጽ የሚታይበት ሙሉ ፎቶ መልሰው ይላኩ።")
+            return
 
-        # 🛑 ጥብቅ ማጣሪያ፦ የተቀባይ ስም ማረጋገጫ (ወደ ሌላ ሰው ከተላከ የሚሰጠው ምላሽ)
-        if receiver == "ያልታወቀ":
+        url_match = re.search(r'v2-([A-Za-z0-9]+)', qr_data)
+        tx_id = url_match.group(1) if url_match else qr_data[-15:]
+        
+        # 2. የተደገመ መሆኑን ማረጋገጥ
+        cursor.execute("SELECT ticket_number FROM transactions WHERE transaction_id = ?", (tx_id,))
+        result = cursor.fetchone()
+        
+        if result:
+            # 🔄 የተደገመ ከሆነ ለላኪው የነበረውን ዕጣ መናገር
+            tickets_formatted = " , ".join([f"`【 {t.strip()} 】`" for t in result[0].split(",")])
             await update.message.reply_text(
-                "❌ **ይቅርታ፣ ይህ ሪሲት ተቀባይነት የለውም!**\n\n"
-                "⚠️ ሪሲቱ ለ **Tamrat Amare** ወይም ለ **Amanuel Hiwet** የተላከ መሆኑን ቦቱ ማረጋገጥ አልቻለም።\n\n"
-                "💡 **እባክዎ ትክክለኛ አካውንት ተጠቅማችሁ ወደ Tamrat Amare ወይም Amanuel Hiwet ያስገቡ።**"
+                f"❌ **ማስጠንቀቂያ፦ ይህ ሪሲት ከዚህ በፊት ተመዝግቧል!**\n\n"
+                f"🏆 የነበረዎት የዕጣ ቁጥር፦ {tickets_formatted} ነበር።"
             )
+            # ሁኔታውን ማጽዳት
+            context.user_data.pop(user_id, None)
             return
 
-        if tx_id == "ያልታወቀ":
-            if qr_data:
-                tx_id = qr_data[-15:]
-            else:
-                await update.message.reply_text("⚠️ ሪሲቱን ማስተናገድ አልተቻለም። እባክዎ የግብይት ቁጥሩ (Ref ID) በግልጽ የሚታይበት ትክክለኛ ፎቶ ይላኩ።")
-                return
-
-        # 3. በዳታቤዝ ውስጥ ማረጋገጥና የዕጣ ቁጥሮችን መስጠት
-        is_new, tickets = check_and_save_tickets(tx_id, qr_data if qr_data else "No QR", amount_num)
+        # 3. አዲስ ከሆነ መረጃውን ወደ እርስዎ (Admin) መላክ
+        await update.message.reply_text("⚡ ሪሲትዎ እና መረጃዎ ደርሶኛል! በባለቤቱ እየተረጋገጠ ስለሆነ ጥቂት ደቂቃዎችን ይጠብቁ...")
         
-        if is_new == "FULL":
-            await update.message.reply_text("😔 ይቅርታ፣ ሁሉም የ3000 ዕጣ ቁጥሮች አልቀዋል።")
-            return
-            
-        if is_new:
-            status_msg = "✅ **አዲስ የግብይት ማረጋገጫ ተረጋግጧል!**"
-            tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
-            ticket_msg = (
-                f"🎉 **እንኳን ደስ አለዎት! በከፈሉት ብር መጠን ልክ የተሰጡዎት {len(tickets)} የዕጣ ቁጥሮች፦**\n\n"
-                f"{tickets_formatted}\n\n"
-                f"*(እነዚህ ቁጥሮች በፍጹም አይደገምም፤ በጥንቃቄ ይያዙ)*"
-            )
-        else:
-            status_msg = "❌ **ማስጠንቀቂያ፦ ድጋሚ የተላከ (የቆየ) መረጃ!**"
-            tickets_formatted = " , ".join([f"`【 {t} 】`" for t in tickets])
-            ticket_msg = f"⚠️ ይህ ሪሲት ቀደም ሲል ተመዝግቧል። የነበሩዎት የዕጣ ቁጥሮች፦ {tickets_formatted} ነበሩ።"
+        u_name = state.get('name')
+        u_phone = state.get('phone')
         
-        link_str = f"[ሊንኩን ለመክፈት እዚህ ይጫኑ]({qr_data})" if qr_data else "የQR ኮድ የለም"
+        # የአስተዳዳሪ ውሳኔ ቁልፎች
+        keyboard = [
+            [
+                InlineKeyboardButton("🎟 1 ዕጣ ስጥ", callback_data=f"app_1_{tx_id}_{user_id}"),
+                InlineKeyboardButton("🎟 2 ዕጣ ስጥ", callback_data=f"app_2_{tx_id}_{user_id}")
+            ],
+            [
+                InlineKeyboardButton("🎟 3 ዕጣ ስጥ", callback_data=f"app_3_{tx_id}_{user_id}"),
+                InlineKeyboardButton("❌ ውድቅ አድርግ", callback_data=f"rej_{tx_id}_{user_id}")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        detailed_response = (
-            f"{status_msg}\n\n"
-            f"📊 **የተገኘ የሪሲት ዝርዝር፦**\n"
+        # በጊዚያዊነት የQR እና የደንበኛ መረጃዎችን መያዝ
+        context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone}
+        
+        admin_caption = (
+            f"🔔 **አዲስ የሪሲት ጥያቄ መጥቷል!**\n\n"
+            f"👤 **የደንበኛ ስም፦** `{u_name}`\n"
+            f"📞 **ስልክ ቁጥር፦** `{u_phone}`\n"
             f"🔹 **Ref ID፦** `{tx_id}`\n"
-            f"🔹 **የገንዘብ መጠን፦** `{amount_str}`\n"
-            f"🔹 **ላኪ፦** `{sender}`\n"
-            f"🔹 **ተቀባይ፦** `✅ {receiver}`\n"
-            f"🔗 **የባንክ ማረጋገጫ፦** {link_str}\n\n"
-            f"{ticket_msg}"
+            f"🔗 [የባንክ ማረጋገጫ ሊንክ]({qr_data})\n\n"
+            f"💡 *እባክዎ ሪሲቱን አይተው ከታች ካሉት አማራጮች ስንት ዕጣ እንደሚገባው ይፍቀዱለት፦*"
         )
-        await update.message.reply_text(detailed_response, parse_mode="Markdown")
-            
+        
+        await context.bot.send_photo(
+            chat_id=ADMIN_ID,
+            photo=photo_file.file_id,
+            caption=admin_caption,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        
+        # የተጠቃሚውን የደረጃ ሁኔታ ማጽዳት
+        context.user_data.pop(user_id, None)
+        
     except Exception as e:
         logging.error(f"Error: {e}")
-        await update.message.reply_text("❌ ፎቶውን በማንበብ ሂደት ላይ ስህተት አጋጥሟል።")
-        
+        await update.message.reply_text("❌ ፎቶውን በማስተናገድ ላይ ስህተት አጋጥሟል።")
     finally:
         if os.path.exists(photo_path):
             os.remove(photo_path)
+
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data.startswith("rej_"):
+        _, tx_id, user_id = data.split("_")
+        await query.message.edit_caption("❌ ይህ ሪሲት በርስዎ ውድቅ ተደርጓል።")
+        try:
+            await context.bot.send_message(
+                chat_id=int(user_id), 
+                text="❌ **ይቅርታ፣ የላኩት ሪሲት በባለቤቱ ውድቅ ተደርጓል።**\n⚠️ እባክዎ ትክክለኛ ሪሲት መላክዎን ያረጋግጡ።"
+            )
+        except:
+            pass
+        return
+
+    if data.startswith("app_"):
+        _, count_str, tx_id, user_id = data.split("_")
+        count = int(count_str)
+        
+        cached = context.user_data.get(tx_id, {'qr': 'No Link', 'name': 'ያልታወቀ', 'phone': 'ያልታወቀ'})
+        qr_data = cached.get('qr')
+        u_name = cached.get('name')
+        u_phone = cached.get('phone')
+        
+        # የዕጣ ቁጥሮችን በዘፈቀደ (Randomly) መፍጠር
+        tickets = generate_unique_tickets(count)
+        if not tickets:
+            await query.message.edit_caption("😔 ይቅርታ፣ የ3000 ዕጣ ቁጥሮች አልቀዋል።")
+            return
+            
+        tickets_str = ",".join(map(str, tickets))
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute(
+                "INSERT INTO transactions (transaction_id, qr_data, status, ticket_number, user_id, user_name, user_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (tx_id, qr_data, "COMPLETED", tickets_str, user_id, u_name, u_phone, current_time)
+            )
+            conn.commit()
+            
+            tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
+            
+            # ለአንተ (Admin) የሚታይ
+            await query.message.edit_caption(
+                f"✅ **ሪሲቱ ጸድቋል!**\n"
+                f"👤 ስም፦ {u_name}\n"
+                f"🔢 የተፈቀደ የዕጣ ብዛት፦ {count}\n"
+                f"🎫 የተሰጡ ቁጥሮች፦ `{tickets_str}`"
+            )
+            
+            # ለደንበኛው የሚላክ
+            user_msg = (
+                f"✅ **የገንዘብ ማረጋገጫዎ በባለቤቱ ጽድቋል!**\n\n"
+                f"🎉 **እንኳን ደስ አለዎት! በባለቤቱ ውሳኔ መሠረት የተሰጡዎት {count} የዕጣ ቁጥሮች፦**\n\n"
+                f"{tickets_formatted}\n\n"
+                f"*(እነዚህ ቁጥሮች በፍጹም አይደገሙም፤ በጥንቃቄ ይያዙ)*"
+            )
+            await context.bot.send_message(chat_id=int(user_id), text=user_msg, parse_mode="Markdown")
+            
+        except sqlite3.IntegrityError:
+            await query.message.edit_caption("❌ ይህ ሪሲት አስቀድሞ ተመዝግቧል።")
 
 # =======================
 # MAIN ASYNC FUNCTION
@@ -246,9 +296,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.Regex('^(🏦 የተቀባይ አካውንት|📸 ሪሲት ለመላክ|🎁 ሽልማቶች|📞 በስልክ ለማግኘት)$') | filters.TEXT & ~filters.COMMAND, handle_text_buttons))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(admin_callback))
     
-    print("ቦቱ በጥብቅ ስም ማጣሪያና በዕጣ ሲስተም ሥራ ጀምሯል...")
+    print("ቦቱ በአዝራሮች ሜኑ እና በአስተዳዳሪ ፈቃድ ሥርዓት ሥራ ጀምሯል...")
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
