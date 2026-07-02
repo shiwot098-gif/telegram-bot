@@ -256,10 +256,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    text = update.message.text.strip()
     user_id = update.message.from_user.id
     
-    if text == '🏦 ሒሳብ ቁፅሪ ንምርካብ ':
+    if text == '🏦 ሒሳብ ቁፅሪ ንምርካብ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
             "🏦 ንግዲ ባንኪ ኢትዮጵያ (CBE)\n\n"
@@ -272,17 +272,15 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif text == '🎟 ዕጫታት ዝርዝር':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "  ኣብ ቀደማይ ዙር ሒዝናዮም ዝመፃና ዕጫታት ዝርዝ\n\n"
-           
+            "  ኣብ ቀደማይ ዙር ሒዝናዮም ዝመፃና ዕጫታት ዝርዝር\n\n"
             "🥇 1ይ ዕጫ BYD Seagull ዘመናዊት መኪና 🚙\n"
             "🥈 2ይ ዕጫ BYD Seagull ዘመናዊት መኪና 🚙\n"
             "🥉 3ይ ዕጫ BYD Seagull ዘመናዊት መኪና 🚙\n\n"
-           
-                "ዕድል ልልሞከረ እዩ 🙌! ይቁረፁ ይሸለሙ ።"
+            "ዕድል ልልሞከረ እዩ 🙌! ይቁረፁ ይሸለሙ ።"
         )
         return
         
-    elif text == ' 🏆 ተሸለምቲ 1ይ ዙር':
+    elif text == '🎉 ተሸለምቲ 1ይ ዙር':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
             "📣 ዕላማ ተሸለምቲ 1ይ ዙር\n\n"
@@ -290,7 +288,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
         
-    elif text == '📞 ብስልኪ ንምርካብ':
+    elif text == '☎️ ብስልኪ ንምርካብ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
             "📞 ብስልኪ ንምርካብ\n\n"
@@ -299,7 +297,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
         
-    elif text == '📸 ደረሰኝ ንምልኣኽ':
+    elif text == '🧾 ደረሰኝ ንምልኣኽ':
         context.user_data[user_id] = {'step': 'get_name'}
         await update.message.reply_text("👤 ደረሰኝ ቅድሚ ምልኣኽኩም በጃኹም መጀመርታ ምሉእ ስምኩም የእትዉ")
         return
@@ -311,7 +309,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     state = context.user_data.get(user_id)
     if state and state.get('step') == 'check_my_tickets':
-        search_phone = text.strip()
+        search_phone = text
         cursor.execute("SELECT ticket_number, created_at FROM transactions WHERE user_phone = ?", (search_phone,))
         rows = cursor.fetchall()
         
