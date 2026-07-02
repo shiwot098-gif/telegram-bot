@@ -69,14 +69,14 @@ def generate_unique_tickets(count):
                 new_tickets.append(num)
         return new_tickets
     except Exception as e:
-        logging.error(f"Ticket error: {e}")
+        logging.error(f"Ticket error {e}")
         return [random.randint(1, 3000) for _ in range(count)]
 
 # =======================
 # ADMIN COMMANDS (ትእዛዛት ኣድሚን)
 # =======================
 
-# 📊 ኩነታት ዕጫታት መፈለጢ (ንኣድሚን ጥራይ)
+# 📊 ኩነታት ዕጫታት መፈለጢ
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -93,14 +93,14 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_remaining = 3000 - total_sold
     
     status_msg = (
-        f"📊 **ሓፈሻዊ ኩነታት መሸጣ ዕጫ**\n\n"
-        f"🎟 **ክሳብ ሕጂ ዝተሸጡ ዕጫታት** `{total_sold}`\n"
-        f"⏳ **ዝተረፉ ዘይተሸጡ ዕጫታት** `{total_remaining}`\n"
-        f"📈 **ጠቕላላ መጠን ዕጫታት** `3000`"
+        f"📊 ሓፈሻዊ ኩነታት መሸጣ ዕጫ\n\n"
+        f"🎟 ክሳብ ሕጂ ዝተሸጡ ዕጫታት `{total_sold}`\n"
+        f"⏳ ዝተረፉ ዘይተሸጡ ዕጫታት `{total_remaining}`\n"
+        f"📈 ጠቕላላ መጠን ዕጫታት `3000`"
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
 
-# 🔍 ብቑፅሪ ዕጫ መደለዪ (ንኣድሚን ጥራይ)
+# 🔍 ብቑፅሪ ዕጫ መደለዪ
 async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -121,13 +121,13 @@ async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if search_num in tickets:
             found = True
             await update.message.reply_text(
-                f"🔍 **ሓበሬታ ቁፅሪ ዕጫ ተረኺቡ ኣሎ**\n\n"
-                f"🎫 **ቁፅሪ ዕጫ** `【 {search_num} 】`\n"
-                f"👤 **ዋና (ስም)** `{row[0]}`\n"
-                f"📞 **ቁፅሪ ስልኪ** `{row[1]}`\n"
+                f"🔍 ሓበሬታ ቁፅሪ ዕጫ ተረኺቡ ኣሎ\n\n"
+                f"🎫 ቁፅሪ ዕጫ `【 {search_num} 】`\n"
+                f"👤 ዋና (ስም) `{row[0]}`\n"
+                f"📞 ቁፅሪ ስልኪ `{row[1]}`\n"
                 f"🔢 ብሓባር ዝተወሃቡ ዕጫታት `{row[2]}`\n"
-                f"📅 **ዝተፈቐደሉ ዕለት** {row[3]}\n"
-                f"🔹 **Ref ID** `{row[4]}`",
+                f"📅 ዝተፈቐደሉ ዕለት {row[3]}\n"
+                f"🔹 Ref ID `{row[4]}`",
                 parse_mode="Markdown"
             )
             break
@@ -135,7 +135,7 @@ async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not found:
         await update.message.reply_text(f"❌ እቲ ቁፅሪ ዕጫ `{search_num}` ኣብ ዳታቤዝ ኣይተረኽበን።")
 
-# 👤 ብቁፅሪ ስልኪ መደለዪ (ንኣድሚን ጥራይ)
+# 👤 ብቁፅሪ ስልኪ መደለዪ
 async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -152,28 +152,106 @@ async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if rows:
         user_name_val = rows[0][0]
-        msg = f"👤 **ንቁፅሪ ስልኪ `{search_phone}` ዝተረኽቡ ሓበሬታታት**\n\n"
-        msg += f"👤 **ስም ዓማዊል** `{user_name_val}`\n\n"
-        msg += "📋 **ዝተወሃቡ ዕጫታት ዝርዝር**\n"
+        msg = f"👤 ንቁፅሪ ስልኪ `{search_phone}` ዝተረኽቡ ሓበሬታታት\n\n"
+        msg += f"👤 ስም ዓማዊል `{user_name_val}`\n\n"
+        msg += "📋 ዝተወሃቡ ዕጫታት ዝርዝር\n"
         for i, row in enumerate(rows, 1):
             msg += f"{i}. 🎟 ቁፅሪታት `{row[1]}` (📅 {row[2]})\n"
         await update.message.reply_text(msg, parse_mode="Markdown")
     else:
         await update.message.reply_text(f"❌ ብቁፅሪ ስልኪ `{search_phone}` ዝተመዝገበ ዓማዊል ኣይተረኽበን።")
 
+# 📢 1. BROADCAST (ጽሑፍ ጥራይ ንምልኣኽ)
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        return
+        
+    if not context.args:
+        await update.message.reply_text("⚠️ በጃኹም ንኹሎም ተጠቐምቲ ክሓልፍ ዝደለኹምዎ መልእኽቲ ኣተሓሒዝኩም ጸሓፉ።\nንኣብነት /broadcast ሰላም ኩላትኩም...")
+        return
+        
+    broadcast_msg = update.message.text.split(None, 1)[1]
+    
+    cursor.execute("SELECT DISTINCT user_id FROM transactions WHERE user_id IS NOT NULL")
+    users = cursor.fetchall()
+    
+    if not users:
+        await update.message.reply_text("❌ ኣብ ዳታቤዝ ምንም ተጠቃሚ አልተገኘም።")
+        return
+        
+    success_count = 0
+    await update.message.reply_text(f"📢 ጽሑፍ መልእኽቲ ናብ {len(users)} ተጠቐምቲ ናይ ምልኣኽ ስራሕ ይጅመር ኣሎ...")
+    
+    for row in users:
+        target_user = row[0]
+        try:
+            await context.bot.send_message(chat_id=int(target_user), text=broadcast_msg, parse_mode="Markdown")
+            success_count += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            continue
+            
+    await update.message.reply_text(f"✅ መልእኽቲ ብዓወት ተመሓላሊፉ ኣሎ።\n🎯 ዝበጽሖም ተጠቐምቲ ቁፅሪ {success_count}")
+
+# 🖼️ 2. BROADCAST PHOTO (ፎቶ ምስ ጽሑፍ ንምልኣኽ)
+async def broadcast_photo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        return
+        
+    if not update.message.photo:
+        await update.message.reply_text("⚠️ በጃኹም ፎቶ ምስ ጽሑፍ ኣተሓሒዝኩም ስደዱ። Caption ላይ /broadcast_photo ጽሑፍካ ኢልካ ጸሓፍ።")
+        return
+        
+    caption_text = ""
+    if update.message.caption:
+        caption_parts = update.message.caption.split(None, 1)
+        if len(caption_parts) > 1:
+            caption_text = caption_parts[1]
+            
+    photo_file_id = update.message.photo[-1].file_id
+    
+    cursor.execute("SELECT DISTINCT user_id FROM transactions WHERE user_id IS NOT NULL")
+    users = cursor.fetchall()
+    
+    if not users:
+        await update.message.reply_text("❌ ኣብ ዳታቤዝ ምንም ተጠቃሚ አልተገኘም።")
+        return
+        
+    success_count = 0
+    await update.message.reply_text(f"📢 ፎቶ መልእኽቲ ናብ {len(users)} ተጠቐምቲ ናይ ምልኣኽ ስራሕ ይጅመር ኣሎ...")
+    
+    for row in users:
+        target_user = row[0]
+        try:
+            await context.bot.send_photo(
+                chat_id=int(target_user), 
+                photo=photo_file_id, 
+                caption=caption_text, 
+                parse_mode="Markdown" if caption_text else None
+            )
+            success_count += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            continue
+            
+    await update.message.reply_text(f"✅ ፎቶ መልእኽቲ ብዓወት ተመሓላሊፉ ኣሎ።\n🎯 ዝበጽሖም ተጠቐምቲ ቁፅሪ {success_count}")
+
 # =======================
 # USER HANDLERS (ንዓማዊል)
 # =======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ['🏦 ናይ ተቐባሊ ኣካውንት', '📸 ረሰይት ንምልኣኽ'],
-        ['🎁 ሽልማቶች ዝርዝር', '📞 ብስልኪ ንምርካብ']
+        ['🏦 ሒሳብ ቁፅሪ ንምርካብ', '🧾 ደረሰኝ ንምልኣኽ'],
+        ['🎟 ዕጫታት ዝርዝር', '🎫 ዕፃ ቁፅሪታተይ'],
+        ['🎉 ተሸለምቲ 1ይ ዙር', '☎️ ብስልኪ ንምርካብ']
     ]
     markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
-        "👋 **ሰላም! እንኳዕ ናብዚ ናይ ዕጫ መውጽኢ ቦት ብደሓን መጻእኩም።**\n\n"
-        "👇 ካብቶም ታሕቲ ዘለዉ መማረጺታት ብምጥቃም ምሉእ ሓበሬታ ክትረኽቡን ናይ ክፍሊት ረሰይትኹም ክትሰዱን ትኽእሉ ኢኹም።",
+        "👋 ሰላም እንኳዕ ናብ ናይና online ዕፃ ብደሓን መጻእኩም\n\n"
+        "👇 ካብቶም ታሕቲ ዘለዉ መማረጺታት ብምጥቃም ምሉእ ሓበሬታ ክትረኽቡን ናይ ክፍሊት ደረሰኝኩም ክትሰዱን ትኽእሉ ኢኹም።",
         reply_markup=markup
     )
 
@@ -181,59 +259,100 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text
     user_id = update.message.from_user.id
     
-    if text == '🏦 ናይ ተቐባሊ ኣካውንት':
+    if text == '🏦 ሒሳብ ቁፅሪ ንምርካብ ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "🏦 **ንግዲ ባንኪ ኢትዮጵያ (CBE)**\n\n"
-            "🔹 **ቁፅሪ ኣካውንት** `1000 77 0064 779`\n"
-            "👤 **ስም ኣካውንት** Tamrat Amare / Amanuel Hiwet\n\n"
-            "⚠️ *መተሓሳሰቢ በጃኹም ኣብቲ ልክዕ ቁፅሪ ኣካውንት ምእታውኩም ኣረጋግጹ።*"
+            "🏦 ንግዲ ባንኪ ኢትዮጵያ (CBE)\n\n"
+            "🔹 ቁፅሪ ኣካውንት `1000 77 0064 779`\n"
+            "👤 ስም ኣካውንት Tamrat Amare / Amanuel Hiwet\n\n"
+            "⚠️ መተሓሳሰቢ በጃኹም ኣብቲ ልክዕ ቁፅሪ ኣካውንት ምእታውኩም ኣረጋግጹ።"
         )
         return
         
-    elif text == '🎁 ሽልማቶች ዝርዝር':
+    elif text == '🎟 ዕጫታት ዝርዝር':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "🎁 **ክብረት ዝመልኦም ናይ ዕጫ ሽልማታት ዝርዝር**\n\n"
-            "🥇 **1ይ ዕጫ** BYD Seagull ዘመናዊት መኪና 🚗\n"
-            "🥈 **2ይ ዕጫ** BYD Seagull ዘመናዊት መኪና 🚗\n"
-            "🥉 **3ይ ዕጫ** BYD Seagull ዘመናዊት መኪና 🚗\n\n"
-            "🎉 *ፈጣሪ ጽቡቕ ዕድል ይሃብኩም! ንነፍሲ ወከፍ ዝገበርኩምዎ ክፍሊት ዝያዳ ዕጫታት ብምውሳድ ዕድልኩም ኣስፉሑ።*"
+            "  ኣብ ቀደማይ ዙር ሒዝናዮም ዝመፃና ዕጫታት ዝርዝ\n\n"
+           
+            "🥇 1ይ ዕጫ BYD Seagull ዘመናዊት መኪና 🚙\n"
+            "🥈 2ይ ዕጫ BYD Seagull ዘመናዊት መኪና 🚙\n"
+            "🥉 3ይ ዕጫ BYD Seagull ዘመናዊት መኪና 🚙\n\n"
+           
+                "ዕድል ልልሞከረ እዩ 🙌! ይቁረፁ ይሸለሙ ።"
+        )
+        return
+        
+    elif text == ' 🏆 ተሸለምቲ 1ይ ዙር':
+        context.user_data.pop(user_id, None)
+        await update.message.reply_text(
+            "📣 ዕላማ ተሸለምቲ 1ይ ዙር\n\n"
+            "🔥 ቀደማይ ዙር ኣብ ቀረባ ግዘ ክወድቅ እዩ ! ዕድል ልልሞከረ እዩ ይቁረፁ ይተዓወቱ ።"
         )
         return
         
     elif text == '📞 ብስልኪ ንምርካብ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
-            "📞 **ብስልኪ ንምርካብ**\n\n"
+            "📞 ብስልኪ ንምርካብ\n\n"
             "📱 `09 01 2686 86`\n\n"
-            "💬 ዝኮነ ሕቶ ወይ ሓሳብ እንተሃልዩኩም ክትድውሉልና ትኽእሉ ኢኹም። ንሕና ኩሉ ግዜ ንዓኹም ንምሕጋዝ ድሉዋት ኢና።"
+            "💬 ዝኮነ ሕቶ ወይ ሓሳብ እንተሃልዩኩም ክትድውሉልና ትኽእሉ ኢኹም። ፅቡቅ ዕድል 🙏።"
         )
         return
         
-    elif text == '📸 ረሰይት ንምልኣኽ':
+    elif text == '📸 ደረሰኝ ንምልኣኽ':
         context.user_data[user_id] = {'step': 'get_name'}
-        await update.message.reply_text("👤 **ረሰይት ቅድሚ ምልኣኽኩም በጃኹም መጀመርታ ምሉእ ስምኩም የእትዉ**")
+        await update.message.reply_text("👤 ደረሰኝ ቅድሚ ምልኣኽኩም በጃኹም መጀመርታ ምሉእ ስምኩም የእትዉ")
+        return
+        
+    elif text == '🎫 ዕፃ ቁፅሪታተይ':
+        context.user_data[user_id] = {'step': 'check_my_tickets'}
+        await update.message.reply_text("📞 ዝተውሃቦም ዕፃ ቁፅሪ ንምፍላጥ ዝተመዝገብሉ ስልኪ የእትው ")
         return
 
     state = context.user_data.get(user_id)
+    if state and state.get('step') == 'check_my_tickets':
+        search_phone = text.strip()
+        cursor.execute("SELECT ticket_number, created_at FROM transactions WHERE user_phone = ?", (search_phone,))
+        rows = cursor.fetchall()
+        
+        if rows:
+            msg = f"🎫 ንቁፅሪ ስልኪ `{search_phone}` ዝተውሃቦም ዕጫ ቁፅሪ ዝርዝር\n\n"
+            all_tickets = []
+            for row in rows:
+                if row[0]:
+                    all_tickets.extend([t.strip() for t in row[0].split(",")])
+            
+            decorated_tickets = "  ".join([f"✨ ⟦ {tk} ⟧ ✨" for tk in all_tickets])
+            msg += f"📊 ጠቅላላ ዝተውሃቦም ዕጫ ቁፅሪ `{len(all_tickets)}`\n\n"
+            msg += f"📋 ቁፅሪታቶም\n{decorated_tickets}"
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(f"❌ በስልክ ቁጥር `{search_phone}` የተመዘገበ ምንም የዕጣ ቁጥር አልተገኘም።\n⚠️ እባክዎ በትክክለኛው ስልክ ቁጥር እንደገና ይሞክሩ።")
+        
+        context.user_data.pop(user_id, None)
+        return
+
     if state:
         if state.get('step') == 'get_name':
             context.user_data[user_id]['name'] = text
             context.user_data[user_id]['step'] = 'get_phone'
-            await update.message.reply_text("📞 **ቀፂልኩም ቁፅሪ ስልክኹም የእትዉ**")
+            await update.message.reply_text("📞 ቀፂልኩም ቁፅሪ ስልክኹም የእትዉ")
             
         elif state and state.get('step') == 'get_phone':
             context.user_data[user_id]['phone'] = text
             context.user_data[user_id]['step'] = 'get_photo'
-            await update.message.reply_text("📸 **ብትኽክል ተመዝጊቡ ኣሎ! ሕጂ ናይ ባንኪ ረሰይት ፎቶ (Screenshot) ብንፁር ስደዱልና**")
+            await update.message.reply_text("🧾 ብትኽክል ተመዝጊቡ ኣሎ! ሕጂ ናይ ባንኪ ደረሰኝ ፎቶ (Screenshot) ብንፁር ስደዱልና")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     state = context.user_data.get(user_id)
     
+    if user_id == ADMIN_ID and update.message.caption and update.message.caption.startswith("/broadcast_photo"):
+        await broadcast_photo_command(update, context)
+        return
+
     if not state or state.get('step') != 'get_photo':
-        await update.message.reply_text("⚠️ በጃኹም መጀመርታ ካብቲ ሜኑ **'📸 ረሰይት ንምልኣኽ'** ዝብል ተጠዊቕኩም ስምኩምን ስልክኹምን የእትዉ።")
+        await update.message.reply_text("⚠️ በጃኹም መጀመርታ ካብቲ ሜኑ '🧾 ደረሰኝ ንምልኣኽ' ዝብል ተጠዊቕኩም ስምኩምን ስልክኹምን የእትዉ።")
         return
         
     import cv2
@@ -258,15 +377,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = cursor.fetchone()
         
         if result:
-            tickets_formatted = " , ".join([f"`【 {t.strip()} 】`" for t in result[0].split(",")])
+            tickets_formatted = " , ".join([f"✨ ⟦ {t.strip()} ⟧ ✨" for t in result[0].split(",")])
             await update.message.reply_text(
-                f"❌ **መጠንቀቕታ እዚ ረሰይት እዚ ቅድሚ ሕጂ ዝተመዝገበ እዩ**\n\n"
-                f"🏆 ዝነበረኩም ቁፅሪ ዕጫ፦ {tickets_formatted} ነይሩ።"
+                f"❌ መጠንቀቕታ እዚ ደረሰኝ እዚ ቅድሚ ሕጂ ዝተመዝገበ እዩ\n\n"
+                f"🏆 ዝነበረኩም ቁፅሪ ዕጫ {tickets_formatted} ነይሩ።"
             )
             context.user_data.pop(user_id, None)
             return
 
-        await update.message.reply_text("⚡ ረሰይትኹምን ሓበሬታኹምን ብሰላም በፂሑና ኣሎ! ብዋናኡ ይረጋገፅ ስለዘሎ በጃኹም ሒደት ደቒቕ ተጸበዩ...")
+        await update.message.reply_text("⚡ ደረሰኝኹምን ሓበሬታኹምን ብሰላም በፂሑና ኣሎ! ብዋናኡ ይረጋገፅ ስለዘሎ በጃኹም ውሱን ደቒቕ ተጸበዩ...")
         
         u_name = state.get('name')
         u_phone = state.get('phone')
@@ -295,12 +414,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone}
         
         admin_caption = (
-            f"🔔 **ሓድሽ ናይ ረሰይት ሕቶ መፂኡ ኣሎ**\n\n"
-            f"👤 **ስም ዓማዊል** `{u_name}`\n"
-            f"📞 **ቁፅሪ ስልኪ** `{u_phone}`\n"
-            f"🔹 **Ref ID** `{tx_id}`\n"
+            f"🔔 ሓድሽ ናይ ደረሰኝ ሕቶ መፂኡ ኣሎ\n\n"
+            f"👤 ስም ዓማዊል `{u_name}`\n"
+            f"📞 ቁፅሪ ስልኪ `{u_phone}`\n"
+            f"🔹 Ref ID `{tx_id}`\n"
             f"🔗 [ሊንክ መረጋገፂ ባንኪ]({qr_data})\n\n"
-            f"💡 *በጃኹም ረሰይት ርኢኹም ካብቶም ታሕቲ ዘለዉ ቁፅሪታት ክንደይ ዕጫ ክወሃቦ ከምዘለዎ ይጫኑ*"
+            f"💡 በጃኹም ደረሰኝ ርኢኹም ዕጫ ይሃቡ"
         )
         
         await context.bot.send_photo(
@@ -314,7 +433,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop(user_id, None)
         
     except Exception as e:
-        logging.error(f"Error: {e}")
+        logging.error(f"Error {e}")
         await update.message.reply_text("❌ ነቲ ፎቶ ኣብ ምትእንጋድ ጌጋ አጋጢሙ።")
     finally:
         if os.path.exists(photo_path):
@@ -328,11 +447,11 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data.startswith("rej_"):
         _, tx_id, user_id = data.split("_")
-        await query.message.edit_caption("❌ እዚ ረሰይት እዚ ብዋናኡ ውድቅ ተገይሩ ኣሎ።")
+        await query.message.edit_caption("❌ እዚ ደረሰኝ እዚ ብዋናኡ ውድቅ ተገይሩ ኣሎ።")
         try:
             await context.bot.send_message(
                 chat_id=int(user_id), 
-                text="❌ **ይቕሬታ ዝለኣኽምዎ ረሰይት ብዋናኡ ውድቅ ተገይሩ ኣሎ።**\n⚠️ በጃኹም ትኽክለኛ ረሰይት ምልኣኽኩም ኣረጋግጹ።"
+                text="❌ ይቕሬታ ዝለኣኽምዎ ደረሰኝ ውድቅ ተገይሩ ኣሎ。\n⚠️ በጃኹም ትኽክለኛ ደረሰኝ ምልኣኮም የረጋግፁ "
             )
         except:
             pass
@@ -362,25 +481,25 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             conn.commit()
             
-            tickets_formatted = " \n ".join([f"🏆 `【 {t} 】` 🏆" for t in tickets])
+            tickets_formatted = "  ".join([f"✨ ⟦ {t} ⟧ ✨" for t in tickets])
             
             await query.message.edit_caption(
-                f"✅ **ረሰይት ጸዲቑ ኣሎ**\n"
+                f"✅ ደረሰኝ ጸዲቑ ኣሎ\n"
                 f"👤 ስም {u_name}\n"
                 f"🔢 ዝተፈቐደ መጠን ዕጫ {count}\n"
                 f"🎫 ዝተወሃቡ ቁፅሪታት `{tickets_str}`"
             )
             
             user_msg = (
-                f"✅ **ናይ ክፍሊት መረጋገፂኹም ብዋናኡ ጸዲቑ ኣሎ**\n\n"
-                f"🎉 **እንኳዕ ደስ በለኩም! ብውሳነ ዋና መሰረት ዝተወሃቡኹም {count} ቁፅሪታት ዕጫ፦**\n\n"
+                f"✅ ናይ ክፍሊት መረጋገፂኹም ብዋናኡ ጸዲቑ ኣሎ\n\n"
+                f"🎉 እንሆ ጽቡቕ ዜና! ብውሳነ ዋና መሰረት ዝተወሃቡኹም {count} ቁፅሪታት ዕጫ\n\n"
                 f"{tickets_formatted}\n\n"
-                f"*(እዞም ቁፅሪታት እዚኦም በፍፁም ኣይድገሙን፤ ብጥንቃቄ ሓዝዎም)*"
+                f"(እዞም ቁፅሪታት እዚኦም በፍፁም ኣይድገሙን፤ ብጥንቃቄ ሓዝዎም)"
             )
             await context.bot.send_message(chat_id=int(user_id), text=user_msg, parse_mode="Markdown")
             
         except sqlite3.IntegrityError:
-            await query.message.edit_caption("❌ እዚ ረሰይት እዚ ኣቐዲሙ ተመዝግቡ እዩ።")
+            await query.message.edit_caption("❌ እዚ ደረሰኝ እዚ ኣቐዲሙ ተመዝግቡ እዩ።")
 
 # =======================
 # MAIN ASYNC FUNCTION
@@ -392,6 +511,7 @@ async def main():
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("search", search_ticket))
     app.add_handler(CommandHandler("user", search_user))
+    app.add_handler(CommandHandler("broadcast", broadcast_command))
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_buttons))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
