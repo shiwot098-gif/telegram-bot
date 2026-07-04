@@ -76,7 +76,6 @@ def generate_unique_tickets(count):
 # ADMIN COMMANDS (ትእዛዛት ኣድሚን)
 # =======================
 
-# 📊 ኩነታት ዕጫታት መፈለጢ
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -100,7 +99,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
 
-# 🔍 ብቑፅሪ ዕጫ መደለዪ
 async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -135,7 +133,6 @@ async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not found:
         await update.message.reply_text(f"❌ እቲ ቁፅሪ ዕጫ `{search_num}` ኣብ ዳታቤዝ ኣይተረኽበን።")
 
-# 👤 ብቁፅሪ ስልኪ መደለዪ
 async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -161,7 +158,6 @@ async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"❌ ብቁፅሪ ስልኪ `{search_phone}` ዝተመዝገበ ዓማዊል ኣይተረኽበን።")
 
-# 📢 1. BROADCAST (ጽሑፍ ጥራይ ንምልኣኽ)
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -194,7 +190,6 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     await update.message.reply_text(f"✅ መልእኽቲ ብዓወት ተመሓላሊፉ ኣሎ።\n🎯 ዝበጽሖም ተጠቐምቲ ቁፅሪ {success_count}")
 
-# 🖼️ 2. BROADCAST PHOTO (ፎቶ ምስ ጽሑፍ ንምልኣኽ)
 async def broadcast_photo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -259,6 +254,56 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
     user_id = update.message.from_user.id
     
+    # 1. አድሚኑ ቁጥር በእጁ የሚሞላበት ሁኔታ (Manual Ticket Allocation)
+    admin_state = context.user_data.get(ADMIN_ID)
+    if user_id == ADMIN_ID and admin_state and admin_state.get('step') == 'waiting_for_manual_ticket':
+        if not text.isdigit() or not (1 <= int(text) <= 3000):
+            await update.message.reply_text("⚠️ በጃኹም ካብ 1 ክሳብ 3000 ዘሎ ትኽክለኛ ቁፅሪ ጥራይ የእትዉ።")
+            return
+
+        tx_id = admin_state['tx_id']
+        target_user_id = admin_state['user_id']
+        
+        cursor.execute("SELECT ticket_number FROM transactions WHERE ticket_number IS NOT NULL")
+        all_rows = cursor.fetchall()
+        used_tickets = set()
+        for row in all_rows:
+            if row[0]:
+                for num in row[0].split(","):
+                    used_tickets.add(int(num.strip()))
+                    
+        if int(text) in used_tickets:
+            await update.message.reply_text(f"❌ እቲ ቁፅሪ `{text}` ቅድሚ ሕጂ ተታሒዙ እዩ! በጃኹም ካልእ ቁፅሪ የእትዉ።")
+            return
+            
+        cached = context.user_data.get(tx_id, {'qr': 'No Link', 'name': 'ዘይተፈልጠ', 'phone': 'ዘይተፈልጠ'})
+        qr_data = cached.get('qr')
+        u_name = cached.get('name')
+        u_phone = cached.get('phone')
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cursor.execute(
+                "INSERT INTO transactions (transaction_id, qr_data, status, ticket_number, user_id, user_name, user_phone, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (tx_id, qr_data, "COMPLETED", text, target_user_id, u_name, u_phone, current_time)
+            )
+            conn.commit()
+            
+            await update.message.reply_text(f"✅ ቁፅሪ `{text}` ንተጠቃሚ `{u_name}` ብዓወት ተዋሂቡ ኣሎ።")
+            
+            user_msg = (
+                f"✅ ናይ ክፍሊት መረጋገፂኹም ብዋናኡ ጸዲቑ ኣሎ\n\n"
+                f"🎉 እንሆ ጽቡቕ ዜና! ብውሳነኹም መሰረት ዝተወሃበኩም ናይ ዕጫ ቁፅሪ፦\n\n"
+                f"✨ ⟦ {text} ⟧ ✨\n\n"
+                f"👋 ፅቡቅ ዕድል ይሃብኩም!"
+            )
+            await context.bot.send_message(chat_id=int(target_user_id), text=user_msg, parse_mode="Markdown")
+            context.user_data.pop(ADMIN_ID, None)
+        except sqlite3.IntegrityError:
+            await update.message.reply_text("❌ እዚ ደረሰኝ እዚ ኣቐዲሙ ተመዝግቡ እዩ።")
+        return
+
+    # 2. የዋናው ማውጫ (Menu Buttons) ቼክ
     if text == '🏦 ሒሳብ ቁፅሪ ንምርካብ':
         context.user_data.pop(user_id, None)
         await update.message.reply_text(
@@ -307,39 +352,55 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("📞 ዝተውሃቦም ዕፃ ቁፅሪ ንምፍላጥ ዝተመዝገብሉ ስልኪ የእትው ")
         return
 
+    # 3. የሁኔታዎች (States) መቆጣጠሪያ - ስም፣ ስልክ እና ትኬት ፍለጋ
     state = context.user_data.get(user_id)
-    if state and state.get('step') == 'check_my_tickets':
-        search_phone = text
-        cursor.execute("SELECT ticket_number, created_at FROM transactions WHERE user_phone = ?", (search_phone,))
-        rows = cursor.fetchall()
-        
-        if rows:
-            msg = f"🎫 ንቁፅሪ ስልኪ `{search_phone}` ዝተውሃቦም ዕጫ ቁፅሪ ዝርዝር\n\n"
-            all_tickets = []
-            for row in rows:
-                if row[0]:
-                    all_tickets.extend([t.strip() for t in row[0].split(",")])
-            
-            decorated_tickets = "  ".join([f"✨ ⟦ {tk} ⟧ ✨" for tk in all_tickets])
-            msg += f"📊 ጠቅላላ ዝተውሃቦም ዕጫ ቁፅሪ `{len(all_tickets)}`\n\n"
-            msg += f"📋 ቁፅሪታቶም\n{decorated_tickets}"
-            await update.message.reply_text(msg, parse_mode="Markdown")
-        else:
-            await update.message.reply_text(f"❌ በስልክ ቁጥር `{search_phone}` የተመዘገበ ምንም የዕጣ ቁጥር አልተገኘም።\n⚠️ እባክዎ በትክክለኛው ስልክ ቁጥር እንደገና ይሞክሩ።")
-        
-        context.user_data.pop(user_id, None)
-        return
-
     if state:
-        if state.get('step') == 'get_name':
+        if state.get('step') == 'check_my_tickets':
+            search_phone = text
+            cursor.execute("SELECT ticket_number, created_at FROM transactions WHERE user_phone = ?", (search_phone,))
+            rows = cursor.fetchall()
+            
+            if rows:
+                msg = f"🎫 ንቁፅሪ ስልኪ `{search_phone}` ዝተውሃቦም ዕጫ ቁፅሪ ዝርዝር\n\n"
+                all_tickets = []
+                for row in rows:
+                    if row[0]:
+                        all_tickets.extend([t.strip() for t in row[0].split(",")])
+                
+                decorated_tickets = "  ".join([f"✨ ⟦ {tk} ⟧ ✨" for tk in all_tickets])
+                msg += f"📊 ጠቅላላ ዝተውሃቦም ዕጫ ቁፅሪ `{len(all_tickets)}`\n\n"
+                msg += f"📋 ቁፅሪታቶም\n{decorated_tickets}"
+                await update.message.reply_text(msg, parse_mode="Markdown")
+            else:
+                await update.message.reply_text(f"❌ በስልክ ቁጥር `{search_phone}` የተመዘገበ ምንም የዕጣ ቁጥር አልተገኘም።\n⚠️ እባክዎ በትክክለኛው ስልክ ቁጥር እንደገና ይሞክሩ።")
+            context.user_data.pop(user_id, None)
+            return
+
+        elif state.get('step') == 'get_name':
             context.user_data[user_id]['name'] = text
             context.user_data[user_id]['step'] = 'get_phone'
             await update.message.reply_text("📞 ቀፂልኩም ቁፅሪ ስልክኹም የእትዉ")
+            return
             
-        elif state and state.get('step') == 'get_phone':
+        elif state.get('step') == 'get_phone':
             context.user_data[user_id]['phone'] = text
             context.user_data[user_id]['step'] = 'get_photo'
             await update.message.reply_text("🧾 ብትኽክል ተመዝጊቡ ኣሎ! ሕጂ ናይ ባንኪ ደረሰኝ ፎቶ (Screenshot) ብንፁር ስደዱልና")
+            return
+
+    # 🌟 4. ተጠቃሚው ከማውጫ ውጭ ሌላ ዝም ያለ ፅሁፍ ሲጽፍ የሚመጣ መከላከያ (Falliback)
+    reply_keyboard = [
+        ['🏦 ሒሳብ ቁፅሪ ንምርካብ', '🧾 ደረሰኝ ንምልኣኽ'],
+        ['🎟 ዕጫታት ዝርዝር', '🎫 ዕፃ ቁፅሪታተይ'],
+        ['🎉 ተሸለምቲ 1ይ ዙር', '☎️ ብስልኪ ንምርካብ']
+    ]
+    markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+    await update.message.reply_text(
+        "⚠️ **ጌጋ መልእኽቲ!**\n\n"
+        "📱 በጃኹም ካብቶም ታሕቲ ዘለዉ ናይ **ማውጫ (Menu)** መማረጺታት ጥራይ ጠዊቕኩም ተጠቐሙ። ዝም ብልኩም ፅሑፍ ኣይእትዉ።",
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -383,51 +444,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.pop(user_id, None)
             return
 
-        await update.message.reply_text("⚡ ደረሰኝኹምን ሓበሬታኹምን ብሰላም በፂሑና ኣሎ! ብዋናኡ ይረጋገፅ ስለዘሎ በጃኹም ውሱን ደቒቕ ተጸበዩ...")
-        
         u_name = state.get('name')
         u_phone = state.get('phone')
-        
+        context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone, 'photo_id': photo_file.file_id}
+
+        # ለተጠቃሚው የመራጫ ቁልፎችን ማሳየት
         keyboard = [
-            [
-                InlineKeyboardButton("🎟 1", callback_data=f"app_1_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 2", callback_data=f"app_2_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 3", callback_data=f"app_3_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 4", callback_data=f"app_4_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 5", callback_data=f"app_5_{tx_id}_{user_id}")
-            ],
-            [
-                InlineKeyboardButton("🎟 6", callback_data=f"app_6_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 7", callback_data=f"app_7_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 8", callback_data=f"app_8_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 9", callback_data=f"app_9_{tx_id}_{user_id}"),
-                InlineKeyboardButton("🎟 10", callback_data=f"app_10_{tx_id}_{user_id}")
-            ],
-            [
-                InlineKeyboardButton("❌ ውድቅ ግበር", callback_data=f"rej_{tx_id}_{user_id}")
-            ]
+            [InlineKeyboardButton("🤖 ቦቱ ባዕሉ ይምረጸለይ (Auto)", callback_data=f"userchoice_auto_{tx_id}_{user_id}")],
+            [InlineKeyboardButton("✍️ ኣነ ክምርፅ እደሊ (Manual)", callback_data=f"userchoice_manual_{tx_id}_{user_id}")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone}
-        
-        admin_caption = (
-            f"🔔 ሓድሽ ናይ ደረሰኝ ሕቶ መፂኡ ኣሎ\n\n"
-            f"👤 ስም ዓማዊል `{u_name}`\n"
-            f"📞 ቁፅሪ ስልኪ `{u_phone}`\n"
-            f"🔹 Ref ID `{tx_id}`\n"
-            f"🔗 [ሊንክ መረጋገፂ ባንኪ]({qr_data})\n\n"
-            f"💡 በጃኹም ደረሰኝ ርኢኹም ዕጫ ይሃቡ"
+        await update.message.reply_text(
+            "⚡ ደረሰኝኹምን ሓበሬታኹምን ብሰላም በፂሑና ኣሎ!\n\n"
+            "👇 በጃኹም ዕጫኹም ብኸመይ ክትመርፁ ከምእትደልዩ ምረጹ፦",
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-        
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=photo_file.file_id,
-            caption=admin_caption,
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-        
         context.user_data.pop(user_id, None)
         
     except Exception as e:
@@ -440,9 +470,74 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     data = query.data
     
+    if data.startswith("userchoice_"):
+        _, method, tx_id, user_id = data.split("_")
+        cached = context.user_data.get(tx_id)
+        if not cached:
+            await query.message.edit_text("❌ ሓበሬታ እዚ ደረሰኝ እዚ ጠፊኡ እዩ። በጃኹም ዳግማይ ፈትኑ።")
+            return
+            
+        u_name = cached['name']
+        u_phone = cached['phone']
+        qr_data = cached['qr']
+        photo_id = cached['photo_id']
+
+        if method == "manual":
+            await query.message.edit_text("✍️ 'ኣነ ክምርፅ እደሊ' መሪፅኩም ኣለኹም። ሕቶኹም ናብ ኣድሚን ተላኢኹ ኣሎ፤ በጃኹም ኣድሚን ቁፅሪ ክሳብ ዝህበኩም ተጸበዩ...")
+            
+            admin_keyboard = [
+                [InlineKeyboardButton("✍️ ቁፅሪ ክመርፅ", callback_data=f"adminmanual_{tx_id}_{user_id}")],
+                [InlineKeyboardButton("❌ ውድቅ ግበር", callback_data=f"rej_{tx_id}_{user_id}")]
+            ]
+            admin_caption = (
+                f"🔔 ሓድሽ ናይ ደረሰኝ ሕቶ (ዓማዊል ባዕሉ ክመርጽ ደልዩ)\n\n"
+                f"👤 ስም ዓማዊል `{u_name}`\n"
+                f"📞 ቁፅሪ ስልኪ `{u_phone}`\n"
+                f"🔹 Ref ID `{tx_id}`\n"
+                f"🔗 [ሊንክ መረጋገፂ ባንኪ]({qr_data})\n\n"
+                f"💡 በጃኹም ታሕቲ ዘሎ በተን ጠዊቕኩም ነጻ ቁፅሪ የእትዉሉ"
+            )
+            await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=admin_caption, reply_markup=InlineKeyboardMarkup(admin_keyboard), parse_mode="Markdown")
+            
+        elif method == "auto":
+            await query.message.edit_text("🤖 'ቦቱ ባዕሉ ይምረጸለይ' መሪፅኩም ኣለኹም። ሕቶኹም ናብ ኣድሚን ተላኢኹ ኣሎ፤ መረጋገፂ ምስ ጸደቀ ዕጫኹም ክለኣኸልኩም እዩ።")
+            
+            admin_keyboard = [
+                [
+                    InlineKeyboardButton("🎟 1", callback_data=f"app_1_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 2", callback_data=f"app_2_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 3", callback_data=f"app_3_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 4", callback_data=f"app_4_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 5", callback_data=f"app_5_{tx_id}_{user_id}")
+                ],
+                [
+                    InlineKeyboardButton("🎟 6", callback_data=f"app_6_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 7", callback_data=f"app_7_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 8", callback_data=f"app_8_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 9", callback_data=f"app_9_{tx_id}_{user_id}"),
+                    InlineKeyboardButton("🎟 10", callback_data=f"app_10_{tx_id}_{user_id}")
+                ],
+                [InlineKeyboardButton("❌ ውድቅ ግበር", callback_data=f"rej_{tx_id}_{user_id}")]
+            ]
+            admin_caption = (
+                f"🔔 ሓድሽ ናይ ደረሰኝ ሕቶ (ቦቱ ባዕሉ እንዲመርጥለት)\n\n"
+                f"👤 ስም ዓማዊል `{u_name}`\n"
+                f"📞 ቁፅሪ ስልኪ `{u_phone}`\n"
+                f"🔹 Ref ID `{tx_id}`\n"
+                f"🔗 [ሊንክ መረጋገፂ ባንኪ]({qr_data})\n\n"
+                f"💡 በጃኹም መጠን ዕጫ በመምረጥ አጽድቁለት"
+            )
+            await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo_id, caption=admin_caption, reply_markup=InlineKeyboardMarkup(admin_keyboard), parse_mode="Markdown")
+        return
+
+    if data.startswith("adminmanual_"):
+        _, tx_id, user_id = data.split("_")
+        context.user_data[ADMIN_ID] = {'step': 'waiting_for_manual_ticket', 'tx_id': tx_id, 'user_id': user_id}
+        await context.bot.send_message(chat_id=ADMIN_ID, text="✍️ በጃኹም ነዚ ዓማዊል ክትህብዎ ዝደለኹምዎ ቁፅሪ (ካብ 1 - 3000) ጸሒፍኩም ስደዱ።")
+        return
+
     if data.startswith("rej_"):
         _, tx_id, user_id = data.split("_")
         await query.message.edit_caption("❌ እዚ ደረሰኝ እዚ ብዋናኡ ውድቅ ተገይሩ ኣሎ።")
