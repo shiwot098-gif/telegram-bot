@@ -6,6 +6,11 @@ import re
 import random
 from datetime import datetime
 
+import cv2
+import numpy as np
+from pyzbar.pyzbar import decode
+from PIL import Image
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, 
@@ -21,13 +26,14 @@ from telegram.ext import (
 # =======================
 TOKEN = os.getenv("BOT_TOKEN", "8611743019:AAGEHD_MZTciUYBVatUTcJC5uCw-OM5Ij3U")
 ADMIN_ID = 5942828479  # ናይቲ ኣድሚን ID
+MAX_TICKETS = 5000     # 🎯 ጠቅላላ የዕጣ ጣሪያ ወደ 5,000 ከፍ ብሏል
 
 logging.basicConfig(level=logging.INFO)
 
 # =======================
 # DATABASE SETUP
 # =======================
-conn = sqlite3.connect("transactions.db", check_same_thread=False)
+conn = sqlite3.connect("transactions.db", check_same_thread=False, timeout=30) # ⚡ እንዳይቆለፍ timeout ተጨምሯል
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -49,6 +55,10 @@ conn.commit()
 # HELPERS
 # =======================
 def generate_unique_tickets(count):
+    """
+    ከሉፕ ነፃ በሆነ መንገድ፣ በሴኮንድ ሩብ ውስጥ የቀሩትን ነፃ ቲኬቶች 
+    ከ 1 እስከ 5000 ውስጥ መርጦ ያወጣል። (High Performance)
+    """
     try:
         cursor.execute("SELECT ticket_number FROM transactions WHERE ticket_number IS NOT NULL")
         all_rows = cursor.fetchall()
@@ -59,23 +69,55 @@ def generate_unique_tickets(count):
                 for num in row[0].split(","):
                     used_tickets.add(int(num.strip()))
         
-        if len(used_tickets) + count > 3000:
+        if len(used_tickets) + count > MAX_TICKETS:
             return []
             
-        new_tickets = []
-        while len(new_tickets) < count:
-            num = random.randint(1, 3000)
-            if num not in used_tickets and num not in new_tickets:
-                new_tickets.append(num)
+        all_possible_tickets = set(range(1, MAX_TICKETS + 1))
+        available_tickets = list(all_possible_tickets - used_tickets)
+        
+        # ሉፕ በሌለው መዋቅር በአንድ ጊዜ ነፃ ቁጥሮችን መውሰድ
+        new_tickets = random.sample(available_tickets, count)
         return new_tickets
     except Exception as e:
         logging.error(f"Ticket error {e}")
-        return [random.randint(1, 3000) for _ in range(count)]
+        return []
+
+def advanced_qr_reader(image_path):
+    """
+    በImo ወይም WhatsApp የተጨመቁ (Compress የሆኑ) ደካማ ፎቶዎችን 
+    በ 3 የላቁ ማጣሪያዎች ፈልፍሎ የሚያነብ ኃይለኛ የQR አንባቢ።
+    """
+    # 1. መደበኛ ንባብ በ PyZbar መሞከር
+    try:
+        detected_qrs = decode(Image.open(image_path))
+        if detected_qrs:
+            return detected_qrs[0].data.decode('utf-8')
+    except:
+        pass
+
+    # 2. ካልተነበበ ፎቶውን ወደ Black & White በመቀየር ማጥራት (OpenCV Thresholding)
+    try:
+        img = cv2.imread(image_path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+        
+        detected_qrs = decode(thresh)
+        if detected_qrs:
+            return detected_qrs[0].data.decode('utf-8')
+            
+        # 3. በጥላ ወይም በብርሃን የተጋረደ ከሆነ ማስተካከል (Adaptive Thresholding)
+        adaptive_thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        detected_qrs = decode(adaptive_thresh)
+        if detected_qrs:
+            return detected_qrs[0].data.decode('utf-8')
+    except Exception as e:
+        logging.error(f"Advanced QR processing error: {e}")
+        
+    return None
 
 # =======================
 # ADMIN COMMANDS (ትእዛዛት ኣድሚን)
 # =======================
-
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id != ADMIN_ID:
@@ -89,13 +131,13 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if row[0]:
             total_sold += len(row[0].split(","))
             
-    total_remaining = 3000 - total_sold
+    total_remaining = MAX_TICKETS - total_sold
     
     status_msg = (
         f"📊 ሓፈሻዊ ኩነታት መሸጣ ዕጫ\n\n"
         f"🎟 ክሳብ ሕጂ ዝተሸጡ ዕጫታት `{total_sold}`\n"
         f"⏳ ዝተረፉ ዘይተሸጡ ዕጫታት `{total_remaining}`\n"
-        f"📈 ጠቕላላ መጠን ዕጫታት `3000`"
+        f"📈 ጠቕላላ መጠን ዕጫታት `{MAX_TICKETS}`"
     )
     await update.message.reply_text(status_msg, parse_mode="Markdown")
 
@@ -109,7 +151,6 @@ async def search_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     search_num = context.args[0].strip()
-    
     cursor.execute("SELECT user_name, user_phone, ticket_number, created_at, transaction_id FROM transactions")
     rows = cursor.fetchall()
     
@@ -143,7 +184,6 @@ async def search_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     search_phone = context.args[0].strip()
-    
     cursor.execute("SELECT user_name, ticket_number, created_at FROM transactions WHERE user_phone = ?", (search_phone,))
     rows = cursor.fetchall()
     
@@ -168,7 +208,6 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     broadcast_msg = update.message.text.split(None, 1)[1]
-    
     cursor.execute("SELECT DISTINCT user_id FROM transactions WHERE user_id IS NOT NULL")
     users = cursor.fetchall()
     
@@ -206,7 +245,6 @@ async def broadcast_photo_command(update: Update, context: ContextTypes.DEFAULT_
             caption_text = caption_parts[1]
             
     photo_file_id = update.message.photo[-1].file_id
-    
     cursor.execute("SELECT DISTINCT user_id FROM transactions WHERE user_id IS NOT NULL")
     users = cursor.fetchall()
     
@@ -257,8 +295,8 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 1. አድሚኑ ቁጥር በእጁ የሚሞላበት ሁኔታ (Manual Ticket Allocation)
     admin_state = context.user_data.get(ADMIN_ID)
     if user_id == ADMIN_ID and admin_state and admin_state.get('step') == 'waiting_for_manual_ticket':
-        if not text.isdigit() or not (1 <= int(text) <= 3000):
-            await update.message.reply_text("⚠️ በጃኹም ካብ 1 ክሳብ 3000 ዘሎ ትኽክለኛ ቁፅሪ ጥራይ የእትዉ።")
+        if not text.isdigit() or not (1 <= int(text) <= MAX_TICKETS):
+            await update.message.reply_text(f"⚠️ በጃኹም ካብ 1 ክሳብ {MAX_TICKETS} ዘሎ ትኽክለኛ ቁፅሪ ጥราይ የእትዉ።")
             return
 
         tx_id = admin_state['tx_id']
@@ -344,7 +382,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     elif text == '🧾 ደረሰኝ ንምልኣኽ':
         context.user_data[user_id] = {'step': 'get_name'}
-        await update.message.reply_text("👤 ደረሰኝ ቅድሚ ምልኣኽኩም በጃኹም መጀመርታ ምሉእ ስምኩም የእትዉ")
+        await update.message.reply_text("👤 ደረሰኝቅድሚ ምልኣኽኩም በጃኹም መጀመርታ ምሉእ ስምኩም የእትዉ")
         return
         
     elif text == '🎫 ዕፃ ቁፅሪታተይ':
@@ -388,7 +426,7 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("🧾 ብትኽክል ተመዝጊቡ ኣሎ! ሕጂ ናይ ባንኪ ደረሰኝ ፎቶ (Screenshot) ብንፁር ስደዱልና")
             return
 
-    # 🌟 4. ተጠቃሚው ከማውጫ ውጭ ሌላ ዝም ያለ ፅሁፍ ሲጽፍ የሚመጣ መከላከያ (Falliback)
+    # 4. Fallback (ከተገቢው ውጭ ሲጽፉ)
     reply_keyboard = [
         ['🏦 ሒሳብ ቁፅሪ ንምርካብ', '🧾 ደረሰኝ ንምልኣኽ'],
         ['🎟 ዕጫታት ዝርዝር', '🎫 ዕፃ ቁፅሪታተይ'],
@@ -402,6 +440,9 @@ async def handle_text_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode="Markdown"
     )
 
+# =======================
+# 🚀 ኃይለኛው የፎቶ ማስተናገጃ (Handle Photo)
+# =======================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     state = context.user_data.get(user_id)
@@ -413,17 +454,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not state or state.get('step') != 'get_photo':
         await update.message.reply_text("⚠️ በጃኹም መጀመርታ ካብቲ ሜኑ '🧾 ደረሰኝ ንምልኣኽ' ዝብል ተጠዊቕኩም ስምኩምን ስልክኹምን የእትዉ።")
         return
-        
-    import cv2
+
     photo_file = update.message.photo[-1]
-    file_info = await photo_file.get_file()
+    # ⚡ Render ላይ በኔትወርክ እንዳይቆራረጥ የ 30 ሰከንድ Timeout ታክሏል
+    file_info = await photo_file.get_file(read_timeout=30, write_timeout=30)
     photo_path = f"temp_{user_id}.jpg"
     await file_info.download_to_drive(photo_path)
     
     try:
-        img = cv2.imread(photo_path)
-        detector = cv2.QRCodeDetector()
-        qr_data, _, _ = detector.detectAndDecode(img)
+        # 🌟 አዲሱን እና ኃይለኛውን የQR አንባቢ እዚህ ጋር እንጠራዋለን 🌟
+        qr_data = advanced_qr_reader(photo_path)
         
         if not qr_data:
             await update.message.reply_text("⚠️ ኣብቲ ምስሊ ናይ QR ኮድ ክርከብ ኣይተኻእለን። በጃኹም እቲ QR ኮድ ብንፁር ዝረአ ምሉእ ፎቶ መሊስኩም ስደዱ።")
@@ -448,7 +488,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u_phone = state.get('phone')
         context.user_data[tx_id] = {'qr': qr_data, 'name': u_name, 'phone': u_phone, 'photo_id': photo_file.file_id}
 
-        # ለተጠቃሚው የመራጫ ቁልፎችን ማሳየት
         keyboard = [
             [InlineKeyboardButton("🤖 ቦቱ ባዕሉ ይምረጸለይ (Auto)", callback_data=f"userchoice_auto_{tx_id}_{user_id}")],
             [InlineKeyboardButton("✍️ ኣነ ክምርፅ እደሊ (Manual)", callback_data=f"userchoice_manual_{tx_id}_{user_id}")]
@@ -467,6 +506,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(photo_path):
             os.remove(photo_path)
 
+# =======================
+# CALLBACK QUERY (አዝራሮች)
+# =======================
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -535,7 +577,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adminmanual_"):
         _, tx_id, user_id = data.split("_")
         context.user_data[ADMIN_ID] = {'step': 'waiting_for_manual_ticket', 'tx_id': tx_id, 'user_id': user_id}
-        await context.bot.send_message(chat_id=ADMIN_ID, text="✍️ በጃኹም ነዚ ዓማዊል ክትህብዎ ዝደለኹምዎ ቁፅሪ (ካብ 1 - 3000) ጸሒፍኩም ስደዱ።")
+        await context.bot.send_message(chat_id=ADMIN_ID, text=f"✍️ በጃኹም ነዚ ዓማዊል ክትህብዎ ዝደለኹምዎ ቁፅሪ (ካብ 1 - {MAX_TICKETS}) ጸሒፍኩም ስደዱ።")
         return
 
     if data.startswith("rej_"):
@@ -561,7 +603,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         tickets = generate_unique_tickets(count)
         if not tickets:
-            await query.message.edit_caption("😔 ይቕሬታ እቶም 3000 ቁፅሪታት ዕጫታት ተወዲኦም እዮም።")
+            await query.message.edit_caption(f"😔 ይቕሬታ እቶም {MAX_TICKETS} ቁፅሪታት ዕጫታት ተወዲኦም እዮም።")
             return
             
         tickets_str = ",".join(map(str, tickets))
@@ -600,7 +642,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("search", search_ticket))
     app.add_handler(CommandHandler("user", search_user))
@@ -610,7 +651,7 @@ async def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(admin_callback))
     
-    print("ቦት ብጽሩይ ትግርኛ ስርሑ ጀሚሩ ኣሎ...")
+    print("ቦት በ Render ላይ ስራ ጀምሯል...")
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
